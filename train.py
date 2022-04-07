@@ -6,7 +6,6 @@ from colossalai.core import global_context as gpc
 from colossalai.logging import disable_existing_loggers, get_dist_logger
 from colossalai.trainer import Trainer, hooks
 from colossalai.utils import MultiTimer, get_current_device
-from colossalai.engine.schedule import NonPipelineSchedule
 from data import build_data
 from model import build_model, build_loss
 from utils import calc_model_size, AutoregressiveWrapper
