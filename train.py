@@ -46,10 +46,18 @@ def train_palm():
     PaLM = build_model()
     model = PaLM(num_tokens=50304, dim=512, depth=8)
     model = AutoregressiveWrapper(model)
-    
+
+    '''
+    numel, _ = calc_model_size(model)
+    if numel < 1e9:
+        msg = f"{numel / 1e6:.3f} M"
+    else:
+        msg = f"{numel / 1e9:.3f} B"
+
         
     model_mem = torch.cuda.max_memory_allocated(get_current_device()) / 1024**3
     logger.info("Model is built.", ranks=[0])
+    '''
 
     criterion = build_loss()()
     logger.info("Loss is built.", ranks=[0])
