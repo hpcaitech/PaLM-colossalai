@@ -98,7 +98,6 @@ def train_palm():
         train_dataloader=train_dataloader,
         test_dataloader=test_dataloader,
         epochs=10,
-        max_steps=10,
         hooks=hook_list,
         return_output_label=False,
         display_progress=True,
