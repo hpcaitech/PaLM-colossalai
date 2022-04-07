@@ -21,13 +21,29 @@ def build_data_from_wikitext(dataset_path: str, tokenizer_path: str, seq_len: in
     # Vocab in the paper is sentencepiece. GPT2Tokenizer uses tokenizers like sentencepiece.
     tokenizer = GPT2Tokenizer(vocab_file=tokenizer_path+'/vocab.json', merges_file=tokenizer_path+'/merges.txt')
 
-    def tokenize(examples):
-        tokenizer.pad_token = tokenizer.unk_token
-        result = tokenizer(examples, padding=True, truncation=True, max_length=seq_len, return_tensors='pt')
+    def tokenize(examples, mode='concat'):
+        assert mode in ['concat', 'pad']
+        seq_length = seq_len
+        if mode == 'concat':
+            examples = tokenizer(examples['text'])
+            concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
+            total_length = len(concatenated_examples[list(examples.keys())[0]])
+            if total_length >= seq_length:
+                total_length = (total_length // seq_length) * seq_length
+
+            result = {
+                k: [t[i:i + seq_len] for i in range(0, total_length, seq_length)]
+                for k, t in concatenated_examples.items()
+            }
+        else:
+            tokenizer.pad_token = tokenizer.unk_token
+            result = tokenizer(examples, padding=True, truncation=True, max_length=seq_length, return_tensors='pt')
+
         result["labels"] = copy.deepcopy(result["input_ids"])
+
         return result
 
-    tokenized_dataset = dataset.map(tokenize,
+    tokenized_dataset = dataset.map(partial(tokenize, mode='concat'),
                                     batched=True,
                                     num_proc=16,
                                     load_from_cache_file=False,

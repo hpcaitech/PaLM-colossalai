@@ -1,3 +1,4 @@
+from email.mime import base
 import os
 
 import colossalai
@@ -9,7 +10,6 @@ from colossalai.utils import MultiTimer, get_current_device
 from data import build_data
 from model import build_model, build_loss, build_optimizer
 from utils import calc_model_size, AutoregressiveWrapper
-
 
 def train_palm():
     disable_existing_loggers()
@@ -37,17 +37,22 @@ def train_palm():
             os.mkdir(log_path)
         logger.log_to_file(log_path)
 
-    train_dataloader, test_dataloader = build_data()
+    train_dataloader, test_dataloader = build_data(dataset_path=os.environ['DATA'], 
+                                                   tokenizer_path=os.environ['TOKENIZER'],
+                                                   seq_len=512,
+                                                   batch_size=16)
     logger.info("Dataset loaded.", ranks=[0])
 
-    model = build_model()
+    PaLM = build_model()
+    model = PaLM(num_tokens=50304, dim=512, depth=8)
     model = AutoregressiveWrapper(model)
-
+    
     numel, _ = calc_model_size(model)
     if numel < 1e9:
         msg = f"{numel / 1e6:.3f} M"
     else:
         msg = f"{numel / 1e9:.3f} B"
+        
     model_mem = torch.cuda.max_memory_allocated(get_current_device()) / 1024**3
     logger.info("Model is built.", ranks=[0])
     logger.info(f"Parameter size = {msg} | Model memory = {model_mem:.3f} GB.", ranks=[0])
