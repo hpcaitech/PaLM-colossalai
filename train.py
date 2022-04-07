@@ -10,7 +10,6 @@ from data import build_data
 from model import build_model, build_loss, build_optimizer
 from utils import calc_model_size, AutoregressiveWrapper
 
-
 def train_palm():
     disable_existing_loggers()
     parser = colossalai.get_default_parser()
@@ -37,17 +36,24 @@ def train_palm():
             os.mkdir(log_path)
         logger.log_to_file(log_path)
 
-    train_dataloader, test_dataloader = build_data()
+    train_dataloader, test_dataloader = build_data(dataset_path=os.environ['DATA'], 
+                                                   tokenizer_path=os.environ['TOKENIZER'],
+                                                   seq_len=512,
+                                                   batch_size=16)
     logger.info("Dataset loaded.", ranks=[0])
 
-    model = build_model()
+    PaLM = build_model()
+    model = PaLM(num_tokens=50304, dim=512, depth=8)
     model = AutoregressiveWrapper(model)
+
+    '''
 
     numel, _ = calc_model_size(model)
     if numel < 1e9:
         msg = f"{numel / 1e6:.3f} M"
     else:
         msg = f"{numel / 1e9:.3f} B"
+
     model_mem = torch.cuda.max_memory_allocated(get_current_device()) / 1024**3
     logger.info("Model is built.", ranks=[0])
     logger.info(f"Parameter size = {msg} | Model memory = {model_mem:.3f} GB.", ranks=[0])
@@ -56,6 +62,18 @@ def train_palm():
     logger.info("Loss is built.", ranks=[0])
 
     optimizer = build_optimizer()
+
+        
+    model_mem = torch.cuda.max_memory_allocated(get_current_device()) / 1024**3
+    logger.info("Model is built.", ranks=[0])
+    '''
+
+    criterion = build_loss()()
+    logger.info("Loss is built.", ranks=[0])
+
+    optimizer = torch.optim.AdamW(model.parameters(),
+                                  lr=0.01,
+                                  weight_decay=0.099)
     logger.info("Optimizer is built.", ranks=[0])
 
     engine, train_dataloader, test_dataloader, _ = colossalai.initialize(
@@ -63,23 +81,19 @@ def train_palm():
         optimizer=optimizer,
         criterion=criterion,
         train_dataloader=train_dataloader,
-        test_dataloader=test_dataloader,
+        test_dataloader=test_dataloader
     )
 
-    timer = MultiTimer()
+    def batch_data_process_func(batch_data):
+        data = batch_data['input_ids']
+        labels = batch_data['labels']
+        return data, labels
+    engine.schedule.batch_data_process_func = batch_data_process_func
 
+    timer = MultiTimer()
     trainer = Trainer(engine=engine, logger=logger, timer=timer)
 
     hook_list = [
-        hooks.LogMetricByEpochHook(logger=logger),
-        hooks.LogMetricByStepHook(),
-        hooks.LossHook(),
-        hooks.ThroughputHook(ignored_steps=5),
-        # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
-        # hooks.TensorboardHook(log_dir='./tb_logs', ranks=[0]),
-        # hooks.LogMemoryByEpochHook(logger),
-        # hooks.LogTimingByEpochHook(timer, logger, ignore_num_train_steps=5),
-        # hooks.SaveCheckpointHook(checkpoint_dir='./ckpt')
     ]
 
     logger.info("Training start.", ranks=[0])

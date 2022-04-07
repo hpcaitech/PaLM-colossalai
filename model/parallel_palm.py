@@ -2,13 +2,14 @@ import colossalai
 import torch
 import torch.nn as nn
 from einops import rearrange
-from torch import einsum
+
+from torch import einsum, dtype
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from colossalai.nn.layer.parallel_1d._utils import gather_forward_split_backward
 from colossalai.nn.layer.parallel_3d._utils import get_parallel_mode_from_env
 from colossalai.constants import OUTPUT_GROUP_3D
-from .palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb
+from model.palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb, ParallelResidual, LayerNorm
 from colossalai.global_variables import tensor_parallel_env as tp_env
 
 
@@ -178,6 +179,40 @@ class ParallelPalmTransformerLayer(nn.Module):
         return out + x
         
 
+class PaLMHead(nn.Module):
+    def __init__(self,
+                 dim: int,
+                 num_tokens: int,
+                 word_embedding_weight: nn.Parameter = None,
+                 bias: bool = False,
+                 dtype: dtype = None) -> None:
+        super().__init__()
+        self.dense = colossalai.nn.Classifier(dim, num_tokens, word_embedding_weight, bias=bias, dtype=dtype)
 
+    @property
+    def weight(self):
+        return self.dense.weight
 
+    def forward(self, x):
+        x = self.dense(x)
+        return x
 
+def Parallel_PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4):
+    word_embedding = colossalai.nn.Embedding(num_tokens, dim)
+    net = nn.Sequential(
+        word_embedding,
+        *[
+            ParallelResidual(
+                ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult),
+            )
+            for _ in range(depth)
+        ],
+        LayerNorm(dim),
+        PaLMHead(dim=dim, num_tokens=num_tokens, word_embedding_weight=word_embedding.weight, bias=False)
+    )
+
+    # they used embedding weight tied projection out to logits, not common, but works
+    #net[-1].weight = net[0].weight
+
+    nn.init.normal_(net[0].weight, std=0.02)
+    return net
