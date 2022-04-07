@@ -37,7 +37,7 @@ def run_dist(rank, world_size, config, port):
 
     
 
-@parameterize('mode', ['1d', '2d', '2.5d', '3d'])
+@parameterize('mode', [None, '1d', '2d', '2.5d', '3d'])
 def test_parallel_palm_transformer_layer(mode):
     if mode in ['2.5d', '3d']:
         world_size = 8
