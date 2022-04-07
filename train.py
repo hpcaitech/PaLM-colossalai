@@ -7,7 +7,7 @@ from colossalai.logging import disable_existing_loggers, get_dist_logger
 from colossalai.trainer import Trainer, hooks
 from colossalai.utils import MultiTimer, get_current_device
 from data import build_data
-from model import build_model, build_loss
+from model import build_model, build_loss, build_optimizer
 from utils import calc_model_size, AutoregressiveWrapper
 
 def train_palm():
@@ -47,11 +47,21 @@ def train_palm():
     model = AutoregressiveWrapper(model)
 
     '''
+
     numel, _ = calc_model_size(model)
     if numel < 1e9:
         msg = f"{numel / 1e6:.3f} M"
     else:
         msg = f"{numel / 1e9:.3f} B"
+
+    model_mem = torch.cuda.max_memory_allocated(get_current_device()) / 1024**3
+    logger.info("Model is built.", ranks=[0])
+    logger.info(f"Parameter size = {msg} | Model memory = {model_mem:.3f} GB.", ranks=[0])
+
+    criterion = build_loss()
+    logger.info("Loss is built.", ranks=[0])
+
+    optimizer = build_optimizer()
 
         
     model_mem = torch.cuda.max_memory_allocated(get_current_device()) / 1024**3
@@ -84,20 +94,14 @@ def train_palm():
     trainer = Trainer(engine=engine, logger=logger, timer=timer)
 
     hook_list = [
-        # hooks.LossHook(),
-        #hooks.ThroughputHook(ignored_steps=5),
-        # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
-        # hooks.TensorboardHook(log_dir='./tb_logs', ranks=[0]),
-        # hooks.LogMemoryByEpochHook(logger),
-        # hooks.LogTimingByEpochHook(timer, logger, ignore_num_train_steps=5),
-        # hooks.SaveCheckpointHook(checkpoint_dir='./ckpt')
     ]
 
     logger.info("Training start.", ranks=[0])
     trainer.fit(
         train_dataloader=train_dataloader,
         test_dataloader=test_dataloader,
-        epochs=10,
+        epochs=gpc.config.NUM_EPOCHS,
+        max_steps=10,
         hooks=hook_list,
         return_output_label=False,
         display_progress=True,
