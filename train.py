@@ -53,7 +53,6 @@ def train_palm():
     else:
         msg = f"{numel / 1e9:.3f} B"
 
-        
     model_mem = torch.cuda.max_memory_allocated(get_current_device()) / 1024**3
     logger.info("Model is built.", ranks=[0])
     '''
@@ -84,8 +83,8 @@ def train_palm():
     trainer = Trainer(engine=engine, logger=logger, timer=timer)
 
     hook_list = [
-        # hooks.LossHook(),
-        #hooks.ThroughputHook(ignored_steps=5),
+        hooks.LossHook(),
+        hooks.ThroughputHook(ignored_steps=5),
         # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
         # hooks.TensorboardHook(log_dir='./tb_logs', ranks=[0]),
         # hooks.LogMemoryByEpochHook(logger),
@@ -97,7 +96,7 @@ def train_palm():
     trainer.fit(
         train_dataloader=train_dataloader,
         test_dataloader=test_dataloader,
-        epochs=10,
+        epochs=gpc.config.NUM_EPOCHS,
         hooks=hook_list,
         return_output_label=False,
         display_progress=True,

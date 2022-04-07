@@ -2,6 +2,7 @@ import colossalai
 import torch
 import torch.nn as nn
 from einops import rearrange
+
 from torch import einsum, dtype
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
@@ -177,6 +178,7 @@ class ParallelPalmTransformerLayer(nn.Module):
         out = self.fused_output_linear(concat_input)
         return out + x
         
+
 class PaLMHead(nn.Module):
     def __init__(self,
                  dim: int,
