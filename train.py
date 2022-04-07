@@ -67,22 +67,6 @@ def train_palm():
     criterion = build_loss()
     logger.info("Loss is built.", ranks=[0])
 
-    # data_iter = iter(train_dataloader)
-
-    # for i in range(5):
-    #     model.train()
-
-    #     loss = model(next(data_iter))
-    #     if use_zero:
-    #         model.backward(loss)
-    #     else:
-    #         loss.backward()
-
-    #     logger.info(f"training loss: {loss.item()}", ranks = [0])
-    #     optimizer.step()
-    #     optimizer.zero_grad()
-    # return
-
     # failed to run the following code.
     engine, train_dataloader, test_dataloader, _ = colossalai.initialize(
         model=model,
