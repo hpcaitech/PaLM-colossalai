@@ -16,7 +16,8 @@ def train_palm():
     parser.add_argument("--from_torch", default=False, action="store_true")
     args = parser.parse_args()
     if args.from_torch:
-        colossalai.launch_from_torch(config=args.config, seed=42)
+        # colossalai.launch_from_torch(config=args.config, seed=42)
+        colossalai.launch_from_torch(config={}, seed=42)
     else:
         # standard launch
         colossalai.launch(
