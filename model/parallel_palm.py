@@ -6,8 +6,34 @@ from torch import einsum
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
 from colossalai.nn.layer.parallel_1d._utils import gather_forward_split_backward
+from colossalai.nn.layer.parallel_3d._utils import get_parallel_mode_from_env
+from colossalai.constants import OUTPUT_GROUP_3D
+from .palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb
+from colossalai.global_variables import tensor_parallel_env as tp_env
 
-from .palm import SwiGLU
+
+def partition_by_tp(val):
+    mapping = {
+        None: 1,
+        '1d': gpc.get_world_size(ParallelMode.TENSOR),
+        '2d': tp_env.summa_dim,
+        '2.5d': tp_env.tesseract_dim,
+        '3d': tp_env.depth_3d
+    }
+
+    assert val % mapping[tp_env.mode] == 0
+    return val //  mapping[tp_env.mode]
+    
+
+def get_parallel_mode_for_gather():
+    mapping = {
+        '1d': ParallelMode.TENSOR,
+        '2d': ParallelMode.PARALLEL_2D_ROW,
+        '2.5d': ParallelMode.PARALLEL_2P5D_ROW,
+        '3d': get_parallel_mode_from_env(OUTPUT_GROUP_3D)
+    }
+
+    return mapping[tp_env.mode]
 
 
 class ParallelPalmTransformerLayer(nn.Module):
@@ -22,15 +48,13 @@ class ParallelPalmTransformerLayer(nn.Module):
         self.dim_head = dim_head
         self.attn_inner_dim = num_heads * dim_head
         self.ffn_inner_dim = int(ffn_mult * dim)
+        self.ffn_mult = ffn_mult
 
-        # TODO: this currently only applies to 1D
-        self.num_heads_per_partition = self.num_heads // self.world_size
-        self.attn_inner_dim_per_partition = self.attn_inner_dim // self.world_size
-        self.dim_head_per_partition = self.dim_head // self.world_size
-        self.ffn_inner_dim_per_partition = self.ffn_inner_dim // self.world_size
+        self.num_heads_per_partition = partition_by_tp(self.num_heads)
+        self.attn_inner_dim_per_partition = partition_by_tp(self.attn_inner_dim)
+        self.dim_head_per_partition = partition_by_tp(self.dim_head)
+        self.ffn_inner_dim_per_partition = partition_by_tp(self.ffn_inner_dim)
 
-        self.sanity_checks()
-        
         # build the 2 fused linear layers
         self.multi_query = multi_query
 
@@ -44,41 +68,32 @@ class ParallelPalmTransformerLayer(nn.Module):
             input_linear_dim = self.ffn_inner_dim * 2 + dim_head * num_heads * 3
 
         self.fused_input_linear = colossalai.nn.Linear(dim, input_linear_dim, bias=False)
+        self.mode_for_gahter = get_parallel_mode_for_gather()
         self.fused_output_linear = colossalai.nn.Linear(self.ffn_inner_dim + dim, dim, bias=False)
-
-        # TODO: add rotary embedding
-        # self.rotary_emb = ParallelRotaryEmbedding(self.dim_head)
-
+        
+        self.rotary_emb = RotaryEmbedding(self.dim_head)
         self.swiglu = SwiGLU()
         self.norm = colossalai.nn.LayerNorm(dim)
         self.scale = dim_head ** -0.5
 
         self.register_buffer("mask", None, persistent=False)
         self.register_buffer("pos_emb", None, persistent=False)
-
-
-    def sanity_checks(self):
-        # checks
-        def _assert_divisible(dim, name):
-            assert dim % self.world_size == 0, \
-            f'{name} ({self.attn_inner_dim}) must be divisble by the world size ({self.world_size})'
-
-        _assert_divisible(self.attn_inner_dim, 'Attention inner dimension')
-        _assert_divisible(self.attn_inner_dim, 'Attention inner dimension')
-        _assert_divisible(self.dim_head, 'Attention head dimension')
-        _assert_divisible(self.ffn_inner_dim, 'FFN inner dimension')
-
     
-    def get_mask(self, n, device):
-        if self.mask is not None and self.mask.shape[-1] >= n:
-            return self.mask[:n, :n]
+    def get_mask(self, seq, device):
+        if self.mask is not None and self.mask.shape[-1] >= seq:
+            return self.mask[:seq, :seq]
 
-        mask = torch.ones((n, n), device=device, dtype=torch.bool).triu(1)
+        mask = torch.ones((seq, seq), device=device, dtype=torch.bool).triu(1)
         self.register_buffer("mask", mask, persistent=False)
         return mask
 
-    def get_rotary_embedding(self, n, device):
-        raise NotImplemented('RoPE Embedding has not been implementated yet')
+    def get_rotary_embedding(self, seq, device):
+        if self.pos_emb is not None and self.pos_emb.shape[-2] >= seq:
+            return self.pos_emb[:seq]
+
+        pos_emb = self.rotary_emb(seq, device=device)
+        self.register_buffer("pos_emb", pos_emb, persistent=False)
+        return pos_emb
     
     def forward(self, x):
         seq_length, device = x.shape[1], x.device
@@ -98,8 +113,8 @@ class ParallelPalmTransformerLayer(nn.Module):
             v = res_pack.narrow(dim=2, 
                                 start=(self.attn_inner_dim_per_partition + self.dim_head_per_partition), 
                                 length=self.dim_head_per_partition)
-            k = gather_forward_split_backward(k.contiguous(), parallel_mode=ParallelMode.TENSOR, dim=-1)
-            v = gather_forward_split_backward(v.contiguous(), parallel_mode=ParallelMode.TENSOR, dim=-1)
+            k = gather_forward_split_backward(k.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
+            v = gather_forward_split_backward(v.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
             ffn_input = res_pack.narrow(dim=2,
                                         start=(self.attn_inner_dim_per_partition + 2 * self.dim_head_per_partition),
                                         length=self.ffn_inner_dim_per_partition)
@@ -123,8 +138,9 @@ class ParallelPalmTransformerLayer(nn.Module):
             v = rearrange(v, 'b s (h d) -> b h s d', h=self.num_heads_per_partition)
         q = rearrange(q, 'b s (h d) -> b h s d', h=self.num_heads_per_partition)
 
-        # TODO: apply posititon embedding
-        # q, k = apply_pos_embedding()
+        # apply posititon embedding
+        positions = self.get_rotary_embedding(seq_length, device)
+        q, k = map(lambda t: apply_rotary_pos_emb(positions, t), (q, k))
 
         # apply scale
         q = q * self.scale
@@ -156,7 +172,7 @@ class ParallelPalmTransformerLayer(nn.Module):
 
         concat_input = torch.cat([attn_out, ffn_input], dim=-1)
         out = self.fused_output_linear(concat_input)
-        return out
+        return out + x
         
 
 
