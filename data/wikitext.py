@@ -12,7 +12,7 @@ from torch.distributed import get_world_size
 
 from transformers import GPT2Tokenizer, default_data_collator
 
-def build_data(dataset_path: str, tokenizer_path: str, seq_len: int=512, batch_size: int=8):
+def build_data_from_wikitext(dataset_path: str, tokenizer_path: str, seq_len: int=512, batch_size: int=8):
     world_size = get_world_size()
 
     set_progress_bar_enabled(False)
