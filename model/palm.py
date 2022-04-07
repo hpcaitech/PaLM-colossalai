@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch import einsum, nn
 
+
 # normalization
 # they use layernorm without bias, something that pytorch does not offer
 
@@ -179,6 +180,7 @@ class PaLMTransformer(nn.Module):
 
         out = rearrange(out, "b h n d -> b n (h d)")
         return self.to_out(out) + self.ffn_unfused_kernels(ffn_input)
+
 
 def PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4):
     net = nn.Sequential(
