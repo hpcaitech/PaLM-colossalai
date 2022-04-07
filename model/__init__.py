@@ -1,5 +1,5 @@
-from .parallel_palm import Parallel_PaLM
-from .loss import PaLMLoss
+from model.parallel_palm import Parallel_PaLM
+from model.loss import PaLMLoss
 
 def build_model():
     return Parallel_PaLM

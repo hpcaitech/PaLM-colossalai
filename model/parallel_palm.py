@@ -8,7 +8,7 @@ from colossalai.context import ParallelMode
 from colossalai.nn.layer.parallel_1d._utils import gather_forward_split_backward
 from colossalai.nn.layer.parallel_3d._utils import get_parallel_mode_from_env
 from colossalai.constants import OUTPUT_GROUP_3D
-from .palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb, ParallelResidual, LayerNorm
+from model.palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb, ParallelResidual, LayerNorm
 from colossalai.global_variables import tensor_parallel_env as tp_env
 
 

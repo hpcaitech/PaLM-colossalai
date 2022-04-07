@@ -1,4 +1,4 @@
-from .wikitext import build_data_from_wikitext
+from data.wikitext import build_data_from_wikitext
 
 build_data = build_data_from_wikitext
 

@@ -1,4 +1,3 @@
-import torch
 
 VOCAB_SIZE = 50304
 SEQ_LENGTH = 1024

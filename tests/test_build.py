@@ -1,9 +1,7 @@
-from email.mime import base
 import os
 
-import colossalai
 import torch
-from colossalai.core import global_context as gpc
+import colossalai
 from colossalai.logging import disable_existing_loggers, get_dist_logger
 from data import build_data
 from model import build_model, build_loss
@@ -40,8 +38,31 @@ def test_build():
     model = AutoregressiveWrapper(model)
     logger.info("Model is built.", ranks=[0])
 
-    loss = build_loss()
+    loss = build_loss()()
     logger.info("Loss is built.", ranks=[0])
+
+    optimizer = torch.optim.AdamW(model.parameters(),
+                                  lr=0.01,
+                                  weight_decay=0.099)
+
+    engine, train_dataloader, test_dataloader, _ = colossalai.initialize(
+        model=model,
+        optimizer=optimizer,
+        criterion=loss,
+        train_dataloader=train_dataloader,
+        test_dataloader=test_dataloader,
+    )
+
+    data_iter = iter(train_dataloader)
+    batch = next(data_iter)
+    input_ids = batch.pop('input_ids').cuda()
+    labels = batch.pop('labels').cuda()
+
+    engine.train()
+    engine.zero_grad()
+    output = engine(input_ids)
+    l = engine.criterion(output, labels)
+    engine.backward(l)
 
 if __name__ == "__main__":
     test_build()

@@ -50,7 +50,7 @@ def build_data_from_wikitext(dataset_path: str, tokenizer_path: str, seq_len: in
                                     keep_in_memory=True,
                                     remove_columns='text')
 
-    def seed_worker(_):
+    def seed_worker():
         worker_seed = 1024
         np.random.seed(worker_seed)
         torch.manual_seed(worker_seed)
