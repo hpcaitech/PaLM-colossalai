@@ -44,40 +44,15 @@ def train_palm():
             os.mkdir(log_path)
         logger.log_to_file(log_path)
 
-    train_dataloader, test_dataloader = build_data(batch_size=2, seq_len=32)
+    train_dataloader, test_dataloader = build_data(batch_size=gpc.config.BATCH_SIZE, seq_len=gpc.config.SEQ_LEN)
     logger.info("Dataset loaded.", ranks=[0])
 
-    use_zero = hasattr(gpc.config, 'zero')
-    if use_zero:
-        numel = torch.zeros(1, dtype=torch.int)
-        with ZeroInitContext(
-            target_device=torch.device(f'cuda:{get_current_device()}'),
-            shard_strategy=BucketTensorShardStrategy(),
-            shard_param=True,
-            rm_torch_payload_on_the_fly=False,
-            model_numel_tensor=numel):
-            model = build_model()
-        numel = numel[0]
-        model = ShardedModelV2(
-            model,
-            BucketTensorShardStrategy(),
-            offload_config=dict(device='cpu'),
-            use_memory_tracer=False,
-            reuse_fp16_shard=True,
-        )
-        optimizer = CPUAdam(model.parameters(), lr=1e-3)
-        optimizer = ShardedOptimizerV2(model,
-                                    optimizer,
-                                    cpu_offload=True,
-                                    initial_scale=2**5,
-                                    gpu_margin_mem_ratio=0.8)
-    else:
-        model = build_model()
+    model = build_model()
 
-        numel, _ = calc_model_size(model)
-        model = model.cuda(get_current_device())
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        model.train()
+    numel, _ = calc_model_size(model)
+    model = model.cuda(get_current_device())
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    model.train()
 
     logger.info("Optimizer is built.", ranks=[0])
 
@@ -92,58 +67,58 @@ def train_palm():
     criterion = build_loss()
     logger.info("Loss is built.", ranks=[0])
 
-    data_iter = iter(train_dataloader)
+    # data_iter = iter(train_dataloader)
 
-    for i in range(5):
-        model.train()
+    # for i in range(5):
+    #     model.train()
 
-        loss = model(next(data_iter))
-        if use_zero:
-            model.backward(loss)
-        else:
-            loss.backward()
+    #     loss = model(next(data_iter))
+    #     if use_zero:
+    #         model.backward(loss)
+    #     else:
+    #         loss.backward()
 
-        logger(f"training loss: {loss.item()}", ranks = [0])
-        optimizer.step()
-        optimizer.zero_grad()
-    return
+    #     logger.info(f"training loss: {loss.item()}", ranks = [0])
+    #     optimizer.step()
+    #     optimizer.zero_grad()
+    # return
 
     # failed to run the following code.
-    # engine, train_dataloader, test_dataloader, _ = colossalai.initialize(
-    #     model=model,
-    #     optimizer=optimizer,
-    #     criterion=criterion,
-    #     train_dataloader=train_dataloader,
-    #     test_dataloader=test_dataloader,
-    # )
+    engine, train_dataloader, test_dataloader, _ = colossalai.initialize(
+        model=model,
+        optimizer=optimizer,
+        criterion=criterion,
+        train_dataloader=train_dataloader,
+        test_dataloader=test_dataloader,
+    )
 
-    # timer = MultiTimer()
+    timer = MultiTimer()
 
-    # trainer = Trainer(engine=engine, logger=logger, timer=timer)
+    trainer = Trainer(engine=engine, logger=logger, timer=timer)
 
-    # hook_list = [
-    #     hooks.LogMetricByEpochHook(logger=logger),
-    #     hooks.LogMetricByStepHook(),
-    #     hooks.LossHook(),
-    #     hooks.ThroughputHook(ignored_steps=5),
-    #     # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
-    #     # hooks.TensorboardHook(log_dir='./tb_logs', ranks=[0]),
-    #     # hooks.LogMemoryByEpochHook(logger),
-    #     # hooks.LogTimingByEpochHook(timer, logger, ignore_num_train_steps=5),
-    #     # hooks.SaveCheckpointHook(checkpoint_dir='./ckpt')
-    # ]
+    hook_list = [
+        hooks.LogMetricByEpochHook(logger=logger),
+        hooks.LogMetricByStepHook(),
+        hooks.LossHook(),
+        hooks.ThroughputHook(ignored_steps=5),
+        # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
+        # hooks.TensorboardHook(log_dir='./tb_logs', ranks=[0]),
+        # hooks.LogMemoryByEpochHook(logger),
+        # hooks.LogTimingByEpochHook(timer, logger, ignore_num_train_steps=5),
+        # hooks.SaveCheckpointHook(checkpoint_dir='./ckpt')
+    ]
 
-    # logger.info("Training start.", ranks=[0])
-    # trainer.fit(
-    #     train_dataloader=train_dataloader,
-    #     test_dataloader=test_dataloader,
-    #     epochs=gpc.config.NUM_EPOCHS,
-    #     max_steps=10,
-    #     hooks=hook_list,
-    #     return_output_label=False,
-    #     display_progress=True,
-    # )
-    # logger.info("Training complete.", ranks=[0])
+    logger.info("Training start.", ranks=[0])
+    trainer.fit(
+        train_dataloader=train_dataloader,
+        test_dataloader=test_dataloader,
+        epochs=gpc.config.NUM_EPOCHS,
+        max_steps=10,
+        hooks=hook_list,
+        return_output_label=False,
+        display_progress=True,
+    )
+    logger.info("Training complete.", ranks=[0])
 
 
 if __name__ == "__main__":

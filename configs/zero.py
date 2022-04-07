@@ -8,25 +8,12 @@ NUM_EPOCHS = 60
 SEQ_LEN = 1024
 
 
-zero = dict(
-    model_config=dict(
-        offload_config=dict(device="cpu"),
-        shard_strategy=TensorShardStrategy()
-    ),
-    optimizer_config=dict(
-        cpu_offload=True,
-    )
-)
-
-optimizer = dict(
-    type=Adam,
-    lr=0.00015,
-    weight_decay=1e-2,
-)
-
-model = dict(
-    type=PaLM,
-    dim = 64,
-    num_tokens = 32,
-    depth = 12,
-)
+# zero = dict(
+#     model_config=dict(
+#         offload_config=dict(device="cpu"),
+#         shard_strategy=TensorShardStrategy()
+#     ),
+#     optimizer_config=dict(
+#         cpu_offload=True,
+#     )
+# )
