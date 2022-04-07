@@ -27,6 +27,7 @@ def partition_by_tp(val):
 
 def get_parallel_mode_for_gather():
     mapping = {
+        None: None,
         '1d': ParallelMode.TENSOR,
         '2d': ParallelMode.PARALLEL_2D_ROW,
         '2.5d': ParallelMode.PARALLEL_2P5D_ROW,
@@ -113,8 +114,10 @@ class ParallelPalmTransformerLayer(nn.Module):
             v = res_pack.narrow(dim=2, 
                                 start=(self.attn_inner_dim_per_partition + self.dim_head_per_partition), 
                                 length=self.dim_head_per_partition)
-            k = gather_forward_split_backward(k.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
-            v = gather_forward_split_backward(v.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
+            
+            if self.mode_for_gahter:
+                k = gather_forward_split_backward(k.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
+                v = gather_forward_split_backward(v.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
             ffn_input = res_pack.narrow(dim=2,
                                         start=(self.attn_inner_dim_per_partition + 2 * self.dim_head_per_partition),
                                         length=self.ffn_inner_dim_per_partition)
