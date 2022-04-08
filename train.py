@@ -71,7 +71,7 @@ def train_palm():
         optimizer = gpc.config.optimizer.pop('type')(model.parameters(), **gpc.config.optimizer)
     else:
         optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=1e-2)
-    
+   
     logger.info("Optimizer is built.", ranks=[0])
 
     train_dataloader, test_dataloader = build_data(
