@@ -1,0 +1,5 @@
+torch
+einops>=0.4
+transformers
+datasets==1.18.4
+colossalai==0.1.2

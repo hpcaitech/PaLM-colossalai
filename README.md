@@ -43,3 +43,15 @@ We have provided some in [./configs](./configs/)
 ```shell
 DATA=/PATH/TO/DATA/ TOKENIZER=/PATH/TO/TOKENIZER/ torchrun --nproc_per_node=NUM_GPUS train.py --from_torch --config CONFIG_FILE.py
 ```
+
+## Run With Docker
+
+Dockerfile is provided in this repository and you can run PaLM in Docker with the following commands.
+
+```bash
+# build docker image
+docker build -t palm .
+
+# exec training
+docker run -ti --gpus all --rm palm torchrun  --nproc_per_node 8 train.py --from_torch --config configs/palm_zero.py
+```
