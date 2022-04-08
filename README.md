@@ -20,7 +20,19 @@ wget -P /PATH/TO/TOKENIZER/ https://huggingface.co/gpt2/resolve/main/merges.txt
 ```
 
 ## Usage
-Configure your settings in `CONFIG_FILE.py`, and run
+1.  Configure your settings in `CONFIG_FILE.py`, for example
+```python
+SEQ_LENGTH = 2048
+BATCH_SIZE = 8
+NUM_EPOCHS = 10
+
+parallel = dict(
+    tensor=dict(mode='1d', size=2),
+)
+
+model = "palm_small"
+```
+2.  Run
 ```shell
 DATA=/PATH/TO/DATA/ TOKENIZER=/PATH/TO/TOKENIZER/ torchrun --nproc_per_node=NUM_GPUS train.py --from_torch --config CONFIG_FILE.py
 ```
