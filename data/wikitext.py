@@ -1,3 +1,4 @@
+from asyncio.log import logger
 import random
 import torch
 import numpy as np
@@ -11,8 +12,11 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torch.distributed import get_world_size
 
 from transformers import GPT2Tokenizer, default_data_collator
+from colossalai.logging import get_dist_logger
 
 def build_data_from_wikitext(dataset_path: str, tokenizer_path: str, seq_len: int=512, batch_size: int=8):
+    logger = get_dist_logger("build_data_from_wikitext")
+    logger.info('Begin Building Wikitext Data')
     world_size = get_world_size()
 
     set_progress_bar_enabled(False)
