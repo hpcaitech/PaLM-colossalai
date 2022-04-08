@@ -67,10 +67,11 @@ def train_palm():
     criterion = build_loss()
     logger.info("Loss is built.", ranks=[0])
 
-    if use_zero:
+    if hasattr(gpc.config, 'optimizer'):
         optimizer = gpc.config.optimizer.pop('type')(model.parameters(), **gpc.config.optimizer)
     else:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=0.099)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=1e-2)
+   
     logger.info("Optimizer is built.", ranks=[0])
 
     train_dataloader, test_dataloader = build_data(
