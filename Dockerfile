@@ -1,4 +1,4 @@
-FROM frankleeeee/pytorch-cuda:1.10.1-11.3.0
+FROM hpcaitech/colossalai:0.1.2-cuda11.3-torch1.10
 
 # install dependencies
 RUN cd /workspace \
@@ -9,8 +9,9 @@ RUN cd /workspace \
 # prepare dataset
 RUN cd /workspace \
     && python ./PaLM-colossalai/tools/download_wiki.py \
-    && bash ./PaLM-colossalai/tools/download_token.py
+    && bash ./PaLM-colossalai/tools/download_token.sh
 
 ENV DATA=/workspace/wiki_dataset
-ENV TOKEN=/workspace/token
+ENV TOKENIZER=/workspace/token
 
+WORKDIR /workspace/PaLM-colossalai
