@@ -1,14 +1,14 @@
 # Pathways Language Model (PaLM) based on PyTorch
 A [Colosssal-AI](https://github.com/hpcaitech/ColossalAI) implementation of [Pathways Language Model (PaLM): Scaling to 540 Billion Parameters for Breakthrough Performance](https://ai.googleblog.com/2022/04/pathways-language-model-palm-scaling-to.html).
-We reproduced the model architecture and applied multiple optimization strategies, e.g. data parallelism, tensor parallelism & ZeRO, to scale the training to multiple-GPUs with the help of [Colosssal-AI](https://github.com/hpcaitech/ColossalAI).
+We take advantage of Colosssal-AI to exploit multiple optimization stategies, e.g. data parallelism, tensor parallelism, mixed precision & ZeRO, to scale the training to mulple-GPUs.
 
 You are very welcome to contribute in any way to help us enhance the usability of this project.
 
 ## Preparation
-1. Install [Colosssal-AI](https://github.com/hpcaitech/ColossalAI), which is a Pytorch-based large-scale model training system with various efficient parallelization techniques.
+1. Install requirements, e.g. [Colosssal-AI](https://github.com/hpcaitech/ColossalAI), which is a Pytorch-based large-scale model training system with various efficient parallelization techniques.
 
 ```
-pip install colossalai
+pip install -r requirements.txt
 ```
 
 2.  Use [HuggingFace datasets](https://github.com/huggingface/datasets) to download Wikitext-2 dataset. The placeholder
@@ -25,9 +25,9 @@ bash ./tools/download_token.py </PATH/TO/TOKENIZER/>
 ```
 
 ## Usage
-1.  Configure your settings in `CONFIG_FILE.py`, for example
+1.  Configure your settings in `CONFIG_FILE.py` like below. We also provide some examples in [./configs](./configs/)
 ```python
-SEQ_LENGTH = 2048
+SEQ_LENGTH = 512
 BATCH_SIZE = 8
 NUM_EPOCHS = 10
 
@@ -35,23 +35,32 @@ parallel = dict(
     tensor=dict(mode='1d', size=2),
 )
 
-model = "palm_small"
+model = dict(type="palm_small")
 ```
 
-We have provided some in [./configs](./configs/)
-2.  Run
+
+2.  Set dataset & tokenizer paths
 ```shell
-DATA=/PATH/TO/DATA/ TOKENIZER=/PATH/TO/TOKENIZER/ torchrun --nproc_per_node=NUM_GPUS train.py --from_torch --config CONFIG_FILE.py
+export DATA=</PATH/TO/DATA/>
+export TOKENIZER=</PATH/TO/TOKENIZER/>
 ```
 
-## Run With Docker
+3.  Run
+```shell
+torchrun --nproc_per_node NUM_GPUS \
+    train.py --from_torch --config CONFIG_FILE.py
+```
 
-Dockerfile is provided in this repository and you can run PaLM in Docker with the following commands.
+4.  Run With Docker
+
+    Dockerfile is provided in this repository and you can run PaLM in Docker with the following commands.
 
 ```bash
 # build docker image
 docker build -t palm .
 
 # exec training
-docker run -ti --gpus all --rm palm torchrun  --nproc_per_node 8 train.py --from_torch --config configs/palm_zero.py
+docker run -ti --gpus all --rm palm \
+    torchrun --nproc_per_node NUM_GPUS \
+        train.py --from_torch --config CONFIG_FILE.py
 ```

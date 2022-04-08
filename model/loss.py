@@ -1,6 +1,7 @@
 import colossalai
 from torch import nn
 
+
 class PaLMLoss(nn.Module):
     def __init__(self):
         super().__init__()

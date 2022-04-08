@@ -6,29 +6,28 @@ from colossalai.global_variables import tensor_parallel_env as tp_env
 from colossalai.nn.layer.parallel_3d._utils import get_parallel_mode_from_env
 from colossalai.core import global_context as gpc
 from colossalai.communication import all_gather, reduce_scatter
-from .palm import LayerNorm
 
 
 def partition_by_tp(val):
     mapping = {
         None: 1,
-        '1d': gpc.get_world_size(ParallelMode.TENSOR),
-        '2d': tp_env.summa_dim,
-        '2.5d': tp_env.tesseract_dim,
-        '3d': tp_env.depth_3d
+        "1d": gpc.get_world_size(ParallelMode.TENSOR),
+        "2d": tp_env.summa_dim,
+        "2.5d": tp_env.tesseract_dim,
+        "3d": tp_env.depth_3d,
     }
 
     assert val % mapping[tp_env.mode] == 0
-    return val //  mapping[tp_env.mode]
-    
+    return val // mapping[tp_env.mode]
+
 
 def get_parallel_mode_for_gather():
     mapping = {
         None: None,
-        '1d': ParallelMode.TENSOR,
-        '2d': ParallelMode.PARALLEL_2D_ROW,
-        '2.5d': ParallelMode.PARALLEL_2P5D_ROW,
-        '3d': get_parallel_mode_from_env(OUTPUT_GROUP_3D)
+        "1d": ParallelMode.TENSOR,
+        "2d": ParallelMode.PARALLEL_2D_ROW,
+        "2.5d": ParallelMode.PARALLEL_2P5D_ROW,
+        "3d": get_parallel_mode_from_env(OUTPUT_GROUP_3D),
     }
 
     return mapping[tp_env.mode]
@@ -56,18 +55,17 @@ class _GatherForwardReduceScatterBackward(torch.autograd.Function):
     def backward(ctx, grad_output):
         return reduce_scatter(grad_output, dim=ctx.dim, parallel_mode=ctx.mode), None, None
 
+
 def gather_fwd_reduce_scatter_bwd(tensor, dim, parallel_mode):
     return _GatherForwardReduceScatterBackward.apply(tensor, dim, parallel_mode)
 
+
 def get_layernorm(dim):
     """
-    Return a layernorm layer for the model. As PaLM sets bias to None and 
-    this is not currently supported in ColossalAI Tensor Parallel, we will
-    use the none-bias layernorm for both non-dist and 1D models, other parallel
-    models will have bias for layernorm.
+    Layernorm without bias
     """
 
-    if tp_env.mode in [None, '1d']:
-        return LayerNorm(dim)
-    else:
-        return colossalai.nn.LayerNorm(dim)
+    norm = colossalai.nn.LayerNorm(dim)
+    norm.bias.data.copy_(torch.zeros_like(norm.bias.data))
+    norm.bias.requires_grad = False
+    return norm

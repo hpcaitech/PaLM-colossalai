@@ -1,27 +1,35 @@
-from einops import rearrange
-
-
+import colossalai
 import torch
 import torch.nn as nn
-from torch import einsum, dtype
-
-
-import colossalai
-from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from colossalai.utils.activation_checkpoint import checkpoint as colo_checkpoint
+from colossalai.core import global_context as gpc
+from colossalai.nn import CheckpointModule
+from einops import rearrange
+from torch import dtype, einsum
 
-from model.palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb
-from model.utils import gather_fwd_reduce_scatter_bwd, partition_by_tp, get_parallel_mode_for_gather, get_layernorm
+from model.palm_utils import RotaryEmbedding, SwiGLU, apply_rotary_pos_emb
+from model.parallel_utils import (
+    gather_fwd_reduce_scatter_bwd,
+    get_layernorm,
+    get_parallel_mode_for_gather,
+    partition_by_tp,
+)
 
 
-class ParallelPalmTransformerLayer(nn.Module):
+class ParallelPalmTransformerLayer(CheckpointModule):
+    def __init__(
+        self,
+        dim: int,
+        dim_head: int = 64,
+        num_heads: int = 8,
+        ffn_mult: int = 4,
+        multi_query: bool = True,
+        use_grad_checkpoint=False,
+        use_act_offload=False,
+    ):
+        """Fused PaLM transformer block with tensor parallelism"""
 
-    def __init__(self, dim: int, dim_head: int=64, num_heads: int=8, ffn_mult: int=4, multi_query: bool=True):
-        """
-        """
-
-        super().__init__()
+        super().__init__(checkpoint=use_grad_checkpoint, offload=use_act_offload)
         self.world_size = gpc.get_world_size(ParallelMode.TENSOR)
         self.num_heads = num_heads
         self.dim_head = dim_head
@@ -49,15 +57,15 @@ class ParallelPalmTransformerLayer(nn.Module):
         self.fused_input_linear = colossalai.nn.Linear(dim, input_linear_dim, bias=False)
         self.mode_for_gahter = get_parallel_mode_for_gather()
         self.fused_output_linear = colossalai.nn.Linear(self.ffn_inner_dim + dim_head * num_heads, dim, bias=False)
-        
+
         self.rotary_emb = RotaryEmbedding(self.dim_head)
         self.swiglu = SwiGLU()
         self.norm = get_layernorm(dim)
-        self.scale = dim_head ** -0.5
+        self.scale = dim_head**-0.5
 
         self.register_buffer("mask", None, persistent=False)
         self.register_buffer("pos_emb", None, persistent=False)
-    
+
     def get_mask(self, seq, device):
         if self.mask is not None and self.mask.shape[-1] >= seq:
             return self.mask[:seq, :seq]
@@ -73,8 +81,8 @@ class ParallelPalmTransformerLayer(nn.Module):
         pos_emb = self.rotary_emb(seq, device=device)
         self.register_buffer("pos_emb", pos_emb, persistent=False)
         return pos_emb
-    
-    def forward(self, x):
+
+    def _forward(self, x):
         seq_length, device = x.shape[1], x.device
         # pre-layernorm
         x = self.norm(x)
@@ -83,40 +91,38 @@ class ParallelPalmTransformerLayer(nn.Module):
         res_pack = self.fused_input_linear(x)
 
         if self.multi_query:
-            q = res_pack.narrow(dim=2, 
-                                start=0, 
-                                length=self.attn_inner_dim_per_partition)
-            k = res_pack.narrow(dim=2, 
-                                start=self.attn_inner_dim_per_partition, 
-                                length=self.dim_head_per_partition)
-            v = res_pack.narrow(dim=2, 
-                                start=(self.attn_inner_dim_per_partition + self.dim_head_per_partition), 
-                                length=self.dim_head_per_partition)
+            q = res_pack.narrow(dim=2, start=0, length=self.attn_inner_dim_per_partition)
+            k = res_pack.narrow(dim=2, start=self.attn_inner_dim_per_partition, length=self.dim_head_per_partition)
+            v = res_pack.narrow(
+                dim=2,
+                start=(self.attn_inner_dim_per_partition + self.dim_head_per_partition),
+                length=self.dim_head_per_partition,
+            )
             if self.mode_for_gahter is not None:
                 k = gather_fwd_reduce_scatter_bwd(k.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
                 v = gather_fwd_reduce_scatter_bwd(v.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
-            ffn_input = res_pack.narrow(dim=2,
-                                        start=(self.attn_inner_dim_per_partition + 2 * self.dim_head_per_partition),
-                                        length=self.ffn_inner_dim_per_partition * 2)
+            ffn_input = res_pack.narrow(
+                dim=2,
+                start=(self.attn_inner_dim_per_partition + 2 * self.dim_head_per_partition),
+                length=self.ffn_inner_dim_per_partition * 2,
+            )
         else:
-            q = res_pack.narrow(dim=2, 
-                                start=0, 
-                                length=self.attn_inner_dim_per_partition)
-            k = res_pack.narrow(dim=2, 
-                                start=self.attn_inner_dim_per_partition, 
-                                length=self.attn_inner_dim_per_partition)
-            v = res_pack.narrow(dim=2, 
-                                start=self.attn_inner_dim_per_partition * 2, 
-                                length=self.attn_inner_dim_per_partition)
-            ffn_input = res_pack.narrow(dim=2,
-                                        start=self.attn_inner_dim_per_partition * 3,
-                                        length=self.ffn_inner_dim_per_partition * 2)
-        
+            q = res_pack.narrow(dim=2, start=0, length=self.attn_inner_dim_per_partition)
+            k = res_pack.narrow(
+                dim=2, start=self.attn_inner_dim_per_partition, length=self.attn_inner_dim_per_partition
+            )
+            v = res_pack.narrow(
+                dim=2, start=self.attn_inner_dim_per_partition * 2, length=self.attn_inner_dim_per_partition
+            )
+            ffn_input = res_pack.narrow(
+                dim=2, start=self.attn_inner_dim_per_partition * 3, length=self.ffn_inner_dim_per_partition * 2
+            )
+
         # arrange the attention embeddings by head
         if not self.multi_query:
-            k = rearrange(k, 'b s (h d) -> b h s d', h=self.num_heads_per_partition)
-            v = rearrange(v, 'b s (h d) -> b h s d', h=self.num_heads_per_partition)
-        q = rearrange(q, 'b s (h d) -> b h s d', h=self.num_heads_per_partition)
+            k = rearrange(k, "b s (h d) -> b h s d", h=self.num_heads_per_partition)
+            v = rearrange(v, "b s (h d) -> b h s d", h=self.num_heads_per_partition)
+        q = rearrange(q, "b s (h d) -> b h s d", h=self.num_heads_per_partition)
 
         # apply posititon embedding
         positions = self.get_rotary_embedding(seq_length, device)
@@ -156,15 +162,17 @@ class ParallelPalmTransformerLayer(nn.Module):
         concat_input = torch.cat([attn_out, ffn_input], dim=-1)
         out = self.fused_output_linear(concat_input)
         return out + x
-        
+
 
 class PaLMHead(nn.Module):
-    def __init__(self,
-                 dim: int,
-                 num_tokens: int,
-                 word_embedding_weight: nn.Parameter = None,
-                 bias: bool = False,
-                 dtype: dtype = None) -> None:
+    def __init__(
+        self,
+        dim: int,
+        num_tokens: int,
+        word_embedding_weight: nn.Parameter = None,
+        bias: bool = False,
+        dtype: dtype = None,
+    ) -> None:
         super().__init__()
         self.dense = colossalai.nn.Classifier(dim, num_tokens, word_embedding_weight, bias=bias, dtype=dtype)
 
@@ -176,18 +184,34 @@ class PaLMHead(nn.Module):
         x = self.dense(x)
         return x
 
-def Parallel_PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4, use_gradient_checkpoint = True, use_act_offload = True):
+
+def Parallel_PaLM(
+    dim,
+    num_tokens,
+    depth,
+    dim_head=64,
+    num_heads=8,
+    ff_mult=4,
+    use_grad_checkpoint=True,
+    use_act_offload=True,
+):
     word_embedding = colossalai.nn.Embedding(num_tokens, dim)
     net = nn.Sequential(
         word_embedding,
         *[
-            colo_checkpoint(ParallelPalmTransformerLayer, use_act_offload, dim, dim_head, heads, ff_mult) \
-                if use_gradient_checkpoint else ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult)
+            ParallelPalmTransformerLayer(
+                dim=dim,
+                dim_head=dim_head,
+                num_heads=num_heads,
+                ffn_mult=ff_mult,
+                use_grad_checkpoint=use_grad_checkpoint,
+                use_act_offload=use_act_offload,
+            )
             for _ in range(depth)
         ],
         get_layernorm(dim),
         # they used embedding weight tied projection out to logits, not common, but works
-        PaLMHead(dim=dim, num_tokens=num_tokens, word_embedding_weight=word_embedding.weight, bias=False)
+        PaLMHead(dim=dim, num_tokens=num_tokens, word_embedding_weight=word_embedding.weight, bias=False),
     )
 
     nn.init.normal_(net[0].weight, std=0.02)
