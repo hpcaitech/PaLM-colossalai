@@ -16,12 +16,13 @@ zero = dict(
     ),
     optimizer_config=dict(
         cpu_offload=True,
+        initial_scale=2**5,
     )
 )
 
 optimizer = dict(
     type=CPUAdam,
-    lr=0.00015,
+    lr=0.001,
     weight_decay=1e-2,
 )
 

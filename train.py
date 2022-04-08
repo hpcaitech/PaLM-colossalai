@@ -32,14 +32,15 @@ def train_palm():
             seed=42,
         )
     
-    use_zero3 = hasattr(gpc.config, 'zero')
+    use_zero = hasattr(gpc.config, 'zero')
     ctx = contextlib.nullcontext()
-    if use_zero3:
+    if use_zero:
         ctx = ZeroInitContext(target_device=torch.cuda.current_device(),
                               shard_strategy=gpc.config.zero.model_config.shard_strategy,
                               shard_param=True
                               )
-                    
+        
+
     logger = get_dist_logger()
     if hasattr(gpc.config, "LOG_PATH"):
         log_path = gpc.config.LOG_PATH
@@ -82,7 +83,11 @@ def train_palm():
     criterion = build_loss()()
     logger.info("Loss is built.", ranks=[0])
 
-    optimizer = torch.optim.AdamW(model.parameters(),
+
+    if use_zero:
+        optimizer = gpc.config.optimizer.pop('type')(model.parameters(), **gpc.config.optimizer)
+    else:
+        optimizer = torch.optim.AdamW(model.parameters(),
                                   lr=0.01,
                                   weight_decay=0.099)
     logger.info("Optimizer is built.", ranks=[0])
