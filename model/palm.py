@@ -1,3 +1,7 @@
+"""
+Basic PaLM adapted from https://github.com/lucidrains/PaLM-pytorch/blob/main/palm_pytorch/palm_pytorch.py
+"""
+
 import torch
 import torch.nn.functional as F
 from einops import rearrange

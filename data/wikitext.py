@@ -3,7 +3,6 @@ import torch
 import numpy as np
 import copy
 
-from functools import partial
 from itertools import chain
 from datasets import load_from_disk, set_progress_bar_enabled
 
