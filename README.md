@@ -1,6 +1,6 @@
 # Pathways Language Model (PaLM) based on PyTorch
 A Colossal-AI implementation of [Pathways Language Model (PaLM): Scaling to 540 Billion Parameters for Breakthrough Performance](https://ai.googleblog.com/2022/04/pathways-language-model-palm-scaling-to.html).
-We reproduced the model architect and applied multiple optimization stategies, e.g. data parallelism, tensor parallelism & ZeRO, to scale the training to mulple-GPUs with teh help of [Colosssal-AI](https://github.com/hpcaitech/ColossalAI).
+We reproduced the model architect and applied multiple optimization stategies, e.g. data parallelism, tensor parallelism & ZeRO, to scale the training to mulple-GPUs with the help of [Colosssal-AI](https://github.com/hpcaitech/ColossalAI).
 
 You are very welcome to contribute in any way to help us enhance the usability of this project.
 
