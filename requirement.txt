@@ -1,5 +1,4 @@
 torch
 einops>=0.4
 transformers
-datasets
 colossalai==0.1.2
