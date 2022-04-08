@@ -22,8 +22,8 @@ def calc_model_size(model: torch.nn.Module):
 
     if tensor_parallel_size > 1:
         numel = torch.tensor(numel).to(get_current_device())
-        numel = dist.all_reduce(numel, group=gpc.get_group(ParallelMode.TENSOR)) / tensor_parallel_size
-        numel = numel.item()
+        dist.all_reduce(numel, group=gpc.get_group(ParallelMode.TENSOR))
+        numel = numel.item() / tensor_parallel_size
 
     return numel, numel_per_device
 
