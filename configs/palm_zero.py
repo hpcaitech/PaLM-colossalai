@@ -1,4 +1,5 @@
 from colossalai.nn.optimizer import CPUAdam
+from torch.optim import Adam
 from colossalai.zero.shard_utils import TensorShardStrategy
 
 VOCAB_SIZE = 50304
@@ -20,6 +21,8 @@ zero = dict(
     )
 )
 
+# We use a fast CPU Adam here 
+# Since we set cpu_offload=True in optimizer_config
 optimizer = dict(
     type=CPUAdam,
     lr=0.001,
