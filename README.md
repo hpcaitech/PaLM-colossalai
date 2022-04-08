@@ -1,4 +1,4 @@
-# Pathways Language Model (PaLM) - Pytorch (Colossal-AI)
+# Pathways Language Model (PaLM) based on PyTorch
 A Colossal-AI implementation of [Pathways Language Model (PaLM): Scaling to 540 Billion Parameters for Breakthrough Performance](https://ai.googleblog.com/2022/04/pathways-language-model-palm-scaling-to.html).
 We reproduced the model architect and applied multiple optimization stategies, e.g. data parallelism, tensor parallelism & ZeRO, to scale the training to mulple-GPUs with teh help of [Colosssal-AI](https://github.com/hpcaitech/ColossalAI).
 
@@ -42,4 +42,16 @@ We have provided some in [./configs](./configs/)
 2.  Run
 ```shell
 DATA=/PATH/TO/DATA/ TOKENIZER=/PATH/TO/TOKENIZER/ torchrun --nproc_per_node=NUM_GPUS train.py --from_torch --config CONFIG_FILE.py
+```
+
+## Run With Docker
+
+Dockerfile is provided in this repository and you can run PaLM in Docker with the following commands.
+
+```bash
+# build docker image
+docker build -t palm .
+
+# exec training
+docker run -ti --gpus all --rm palm torchrun  --nproc_per_node 8 train.py --from_torch --config configs/palm_zero.py
 ```
