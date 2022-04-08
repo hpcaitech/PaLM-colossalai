@@ -6,41 +6,12 @@ from einops import rearrange
 from torch import einsum, dtype
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from colossalai.nn.layer.parallel_1d._utils import gather_forward_split_backward
-from colossalai.nn.layer.parallel_3d._utils import get_parallel_mode_from_env
-from colossalai.constants import OUTPUT_GROUP_3D
 from model.palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb, ParallelResidual, LayerNorm
-from colossalai.global_variables import tensor_parallel_env as tp_env
-
-
-def partition_by_tp(val):
-    mapping = {
-        None: 1,
-        '1d': gpc.get_world_size(ParallelMode.TENSOR),
-        '2d': tp_env.summa_dim,
-        '2.5d': tp_env.tesseract_dim,
-        '3d': tp_env.depth_3d
-    }
-
-    assert val % mapping[tp_env.mode] == 0
-    return val //  mapping[tp_env.mode]
-    
-
-def get_parallel_mode_for_gather():
-    mapping = {
-        None: None,
-        '1d': ParallelMode.TENSOR,
-        '2d': ParallelMode.PARALLEL_2D_ROW,
-        '2.5d': ParallelMode.PARALLEL_2P5D_ROW,
-        '3d': get_parallel_mode_from_env(OUTPUT_GROUP_3D)
-    }
-
-    return mapping[tp_env.mode]
-
+from .utils import gather_fwd_reduce_scatter_bwd, partition_by_tp, get_parallel_mode_for_gather
 
 class ParallelPalmTransformerLayer(nn.Module):
 
-    def __init__(self, dim: int, dim_head: int=64, num_heads: int=8, ffn_mult: int=4, multi_query: bool=False):
+    def __init__(self, dim: int, dim_head: int=64, num_heads: int=8, ffn_mult: int=4, multi_query: bool=True):
         """
         """
 
@@ -116,11 +87,11 @@ class ParallelPalmTransformerLayer(nn.Module):
                                 start=(self.attn_inner_dim_per_partition + self.dim_head_per_partition), 
                                 length=self.dim_head_per_partition)
             if self.mode_for_gahter is not None:
-                k = gather_forward_split_backward(k.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
-                v = gather_forward_split_backward(v.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
+                k = gather_fwd_reduce_scatter_bwd(k.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
+                v = gather_fwd_reduce_scatter_bwd(v.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
             ffn_input = res_pack.narrow(dim=2,
                                         start=(self.attn_inner_dim_per_partition + 2 * self.dim_head_per_partition),
-                                        length=self.ffn_inner_dim_per_partition)
+                                        length=self.ffn_inner_dim_per_partition * 2)
         else:
             q = res_pack.narrow(dim=2, 
                                 start=0, 
@@ -133,7 +104,7 @@ class ParallelPalmTransformerLayer(nn.Module):
                                 length=self.attn_inner_dim_per_partition)
             ffn_input = res_pack.narrow(dim=2,
                                         start=self.attn_inner_dim_per_partition * 3,
-                                        length=self.ffn_inner_dim_per_partition)
+                                        length=self.ffn_inner_dim_per_partition * 2)
         
         # arrange the attention embeddings by head
         if not self.multi_query:
@@ -172,6 +143,9 @@ class ParallelPalmTransformerLayer(nn.Module):
 
         # merge heads
         attn_out = rearrange(attn_out, "b h s d -> b s (h d)")
+
+        # mlp swiglu
+        ffn_input = self.swiglu(ffn_input)
 
         concat_input = torch.cat([attn_out, ffn_input], dim=-1)
         out = self.fused_output_linear(concat_input)
