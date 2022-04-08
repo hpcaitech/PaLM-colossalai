@@ -5,13 +5,12 @@ import colossalai
 import torch
 from colossalai.core import global_context as gpc
 from colossalai.logging import disable_existing_loggers, get_dist_logger
-from colossalai.trainer import Trainer, hooks
+from colossalai.trainer import Trainer
 from colossalai.utils import MultiTimer, get_current_device
-from data import build_data
 from model import build_model, build_loss
 from utils import calc_model_size, AutoregressiveWrapper
 from colossalai.zero.init_ctx import ZeroInitContext
-
+from data import build_data
 
 def train_palm():
     disable_existing_loggers()
@@ -33,14 +32,15 @@ def train_palm():
             seed=42,
         )
     
-    use_zero3 = hasattr(gpc.config, 'zero')
+    use_zero = hasattr(gpc.config, 'zero')
     ctx = contextlib.nullcontext()
-    if use_zero3:
+    if use_zero:
         ctx = ZeroInitContext(target_device=torch.cuda.current_device(),
                               shard_strategy=gpc.config.zero.model_config.shard_strategy,
                               shard_param=True
                               )
-                    
+        
+
     logger = get_dist_logger()
     if hasattr(gpc.config, "LOG_PATH"):
         log_path = gpc.config.LOG_PATH
@@ -48,14 +48,6 @@ def train_palm():
 
     assert hasattr(gpc.config, "BATCH_SIZE"), "Please provide BATCH_SIZE in your configuration"
     assert hasattr(gpc.config, "SEQ_LENGTH"), "Please provide SEQ_LENGTH in your configuration"
-
-    train_dataloader, test_dataloader = build_data(
-        dataset_path=os.environ["DATA"],
-        tokenizer_path=os.environ["TOKENIZER"],
-        seq_len=gpc.config.SEQ_LENGTH,
-        batch_size=gpc.config.BATCH_SIZE,
-    )
-    logger.info("Dataset loaded.", ranks=[0])
 
     with ctx:
         model = build_model()
@@ -75,8 +67,19 @@ def train_palm():
     criterion = build_loss()
     logger.info("Loss is built.", ranks=[0])
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=0.099)
+    if hasattr(gpc.config, 'optimizer'):
+        optimizer = gpc.config.optimizer.pop('type')(model.parameters(), **gpc.config.optimizer)
+    else:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=1e-2)
+   
     logger.info("Optimizer is built.", ranks=[0])
+
+    train_dataloader, test_dataloader = build_data(
+        dataset_path=os.environ["DATA"],
+        tokenizer_path=os.environ["TOKENIZER"],
+        seq_len=gpc.config.SEQ_LENGTH,
+        batch_size=gpc.config.BATCH_SIZE,
+    )
 
     engine, train_dataloader, test_dataloader, _ = colossalai.initialize(
         model=model,
