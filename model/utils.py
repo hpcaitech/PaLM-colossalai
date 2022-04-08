@@ -1,3 +1,4 @@
+import colossalai
 import torch
 from colossalai.context import ParallelMode
 from colossalai.constants import OUTPUT_GROUP_3D
@@ -5,6 +6,7 @@ from colossalai.global_variables import tensor_parallel_env as tp_env
 from colossalai.nn.layer.parallel_3d._utils import get_parallel_mode_from_env
 from colossalai.core import global_context as gpc
 from colossalai.communication import all_gather, reduce_scatter
+from .palm import LayerNorm
 
 
 def partition_by_tp(val):
@@ -56,3 +58,16 @@ class _GatherForwardReduceScatterBackward(torch.autograd.Function):
 
 def gather_fwd_reduce_scatter_bwd(tensor, dim, parallel_mode):
     return _GatherForwardReduceScatterBackward.apply(tensor, dim, parallel_mode)
+
+def get_layernorm(dim):
+    """
+    Return a layernorm layer for the model. As PaLM sets bias to None and 
+    this is not currently supported in ColossalAI Tensor Parallel, we will
+    use the none-bias layernorm for both non-dist and 1D models, other parallel
+    models will have bias for layernorm.
+    """
+
+    if tp_env.mode in [None, '1d']:
+        return LayerNorm(dim)
+    else:
+        return colossalai.nn.LayerNorm(dim)
