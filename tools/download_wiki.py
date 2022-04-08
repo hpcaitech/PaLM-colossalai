@@ -4,7 +4,7 @@ from datasets import load_dataset
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', '--output', default='./data', type=str, help='The output path to store data')
+    parser.add_argument('-o', '--output', default='./wiki_dataset', type=str, help='The output path to store data')
     args = parser.parse_args()
 
     wikitext_dataset = load_dataset('wikitext', 'wikitext-2-v1')

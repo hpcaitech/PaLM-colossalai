@@ -10,11 +10,11 @@ from colossalai.global_variables import tensor_parallel_env as tp_env
 
 @parameterize('multi_query', [True, False])
 def run_parallel_transformer_layer(multi_query):
-    layer = ParallelPalmTransformerLayer(dim=512, multi_query=multi_query).cuda()
+    batch_size = 8
+    seq_length = 256
+    dim = 384
 
-    batch_size = 32
-    seq_length = 128
-    dim = 512
+    layer = ParallelPalmTransformerLayer(dim=dim, multi_query=multi_query).cuda()
 
     if tp_env.mode == '2d':
         batch_size //= tp_env.summa_dim

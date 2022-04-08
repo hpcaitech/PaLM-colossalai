@@ -6,8 +6,9 @@ from einops import rearrange
 from torch import einsum, dtype
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
-from model.palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb, ParallelResidual, LayerNorm
-from .utils import gather_fwd_reduce_scatter_bwd, partition_by_tp, get_parallel_mode_for_gather
+from model.palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb
+from .utils import gather_fwd_reduce_scatter_bwd, partition_by_tp, get_parallel_mode_for_gather, get_layernorm
+
 
 class ParallelPalmTransformerLayer(nn.Module):
 
@@ -42,11 +43,11 @@ class ParallelPalmTransformerLayer(nn.Module):
 
         self.fused_input_linear = colossalai.nn.Linear(dim, input_linear_dim, bias=False)
         self.mode_for_gahter = get_parallel_mode_for_gather()
-        self.fused_output_linear = colossalai.nn.Linear(self.ffn_inner_dim + dim, dim, bias=False)
+        self.fused_output_linear = colossalai.nn.Linear(self.ffn_inner_dim + dim_head * num_heads, dim, bias=False)
         
         self.rotary_emb = RotaryEmbedding(self.dim_head)
         self.swiglu = SwiGLU()
-        self.norm = colossalai.nn.LayerNorm(dim)
+        self.norm = get_layernorm(dim)
         self.scale = dim_head ** -0.5
 
         self.register_buffer("mask", None, persistent=False)
@@ -175,12 +176,10 @@ def Parallel_PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4):
     net = nn.Sequential(
         word_embedding,
         *[
-            ParallelResidual(
-                ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult),
-            )
+            ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult)
             for _ in range(depth)
         ],
-        LayerNorm(dim),
+        get_layernorm(dim),
         PaLMHead(dim=dim, num_tokens=num_tokens, word_embedding_weight=word_embedding.weight, bias=False)
     )
 
