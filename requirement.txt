@@ -1,2 +1,4 @@
+torch
 einops>=0.4
 transformers
+colossalai==0.1.2
