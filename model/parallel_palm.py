@@ -186,11 +186,9 @@ def Parallel_PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4, us
             for _ in range(depth)
         ],
         get_layernorm(dim),
+        # they used embedding weight tied projection out to logits, not common, but works
         PaLMHead(dim=dim, num_tokens=num_tokens, word_embedding_weight=word_embedding.weight, bias=False)
     )
-
-    # they used embedding weight tied projection out to logits, not common, but works
-    #net[-1].weight = net[0].weight
 
     nn.init.normal_(net[0].weight, std=0.02)
     return net
