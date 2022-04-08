@@ -181,8 +181,12 @@ def Parallel_PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4, us
     net = nn.Sequential(
         word_embedding,
         *[
+<<<<<<< HEAD
             colo_checkpoint(ParallelPalmTransformerLayer, use_act_offload, dim, dim_head, heads, ff_mult) \
                 if use_gradient_checkpoint else ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult)
+=======
+            ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult)
+>>>>>>> fixed dim mismatch
             for _ in range(depth)
         ],
         get_layernorm(dim),
