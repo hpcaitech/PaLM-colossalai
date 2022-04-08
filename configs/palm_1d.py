@@ -1,10 +1,9 @@
-
-VOCAB_SIZE = 50304
-SEQ_LENGTH = 1024
+SEQ_LENGTH = 2048
 BATCH_SIZE = 8
 NUM_EPOCHS = 10
 
-TENSOR_PARALLEL_SIZE = 2
+TENSOR_PARALLEL_SIZE = 4
+
 TENSOR_PARALLEL_MODE = '1d'
 
 parallel = dict(
@@ -12,5 +11,4 @@ parallel = dict(
     tensor=dict(mode=TENSOR_PARALLEL_MODE, size=TENSOR_PARALLEL_SIZE),
 )
 
-model = dict(vocab_size=VOCAB_SIZE,
-             max_position_embeddings=SEQ_LENGTH)
+model = "palm_small"

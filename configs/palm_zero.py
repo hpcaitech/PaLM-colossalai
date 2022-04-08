@@ -31,5 +31,4 @@ parallel = dict(
     tensor=dict(mode=TENSOR_PARALLEL_MODE, size=TENSOR_PARALLEL_SIZE),
 )
 
-model = dict(vocab_size=VOCAB_SIZE,
-             max_position_embeddings=SEQ_LENGTH)
+model = "palm_small"
