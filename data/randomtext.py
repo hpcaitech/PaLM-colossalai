@@ -31,7 +31,7 @@ class RandomTextDataset(torch.utils.data.Dataset):
 
 def build_data_from_random(dataset_path: str, tokenizer_path: str, seq_len: int=512, batch_size: int=8):
     logger = get_dist_logger("build_data_from_random")
-    logger.info('Begin Building Random String as test daata')
+    logger.info('Begin Building Random String as test data')
     random_data = get_random_string(80e5)
     np_rd = np.fromstring(random_data, dtype=np.uint8)
     train_rd, test_rd = np.split(np_rd, [int(70e5)])
