@@ -115,8 +115,8 @@ class ParallelPalmTransformerLayer(nn.Module):
             v = res_pack.narrow(dim=2, 
                                 start=(self.attn_inner_dim_per_partition + self.dim_head_per_partition), 
                                 length=self.dim_head_per_partition)
-            
-            if self.mode_for_gahter:
+            print('here')
+            if self.mode_for_gahter is not None:
                 k = gather_forward_split_backward(k.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
                 v = gather_forward_split_backward(v.contiguous(), parallel_mode=self.mode_for_gahter, dim=-1)
             ffn_input = res_pack.narrow(dim=2,
