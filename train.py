@@ -1,4 +1,5 @@
 import os
+import contextlib
 
 import colossalai
 import torch
@@ -9,12 +10,14 @@ from colossalai.utils import MultiTimer, get_current_device
 from data import build_data
 from model import build_model, build_loss
 from utils import calc_model_size, AutoregressiveWrapper
+from colossalai.zero.init_ctx import ZeroInitContext
 
 def train_palm():
     disable_existing_loggers()
     parser = colossalai.get_default_parser()
     parser.add_argument("--from_torch", default=False, action="store_true")
     args = parser.parse_args()
+
     if args.from_torch:
         colossalai.launch_from_torch(config=args.config, seed=42)
     else:
@@ -28,7 +31,15 @@ def train_palm():
             port=args.port,
             seed=42,
         )
-
+    
+    use_zero3 = hasattr(gpc.config, 'zero')
+    ctx = contextlib.nullcontext()
+    if use_zero3:
+        ctx = ZeroInitContext(target_device=torch.cuda.current_device(),
+                              shard_strategy=gpc.config.zero.model_config.shard_strategy,
+                              shard_param=True
+                              )
+                    
     logger = get_dist_logger()
     if hasattr(gpc.config, "LOG_PATH"):
         log_path = gpc.config.LOG_PATH
@@ -42,9 +53,9 @@ def train_palm():
                                                    batch_size=16)
     logger.info("Dataset loaded.", ranks=[0])
 
-    PaLM = build_model()
-    model = PaLM(num_tokens=50304, dim=512, depth=8)
-    model = AutoregressiveWrapper(model)
+    with ctx:
+        model = build_model()(num_tokens=50304, dim=512, depth=8)
+        model = AutoregressiveWrapper(model)
 
     '''
 
