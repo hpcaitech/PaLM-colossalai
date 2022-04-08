@@ -1,13 +1,18 @@
-import colossalai
-import torch
-import torch.nn as nn
 from einops import rearrange
 
+
+import torch
+import torch.nn as nn
 from torch import einsum, dtype
+
+
+import colossalai
 from colossalai.core import global_context as gpc
 from colossalai.context import ParallelMode
+from colossalai.utils.activation_checkpoint import checkpoint as colo_checkpoint
+
 from model.palm import SwiGLU, RotaryEmbedding, apply_rotary_pos_emb
-from .utils import gather_fwd_reduce_scatter_bwd, partition_by_tp, get_parallel_mode_for_gather, get_layernorm
+from model.utils import gather_fwd_reduce_scatter_bwd, partition_by_tp, get_parallel_mode_for_gather, get_layernorm
 
 
 class ParallelPalmTransformerLayer(nn.Module):
@@ -171,12 +176,13 @@ class PaLMHead(nn.Module):
         x = self.dense(x)
         return x
 
-def Parallel_PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4):
+def Parallel_PaLM(*, dim, num_tokens, depth, dim_head=64, heads=8, ff_mult=4, use_gradient_checkpoint = True, use_act_offload = True):
     word_embedding = colossalai.nn.Embedding(num_tokens, dim)
     net = nn.Sequential(
         word_embedding,
         *[
-            ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult)
+            colo_checkpoint(ParallelPalmTransformerLayer, use_act_offload, dim, dim_head, heads, ff_mult) \
+                if use_gradient_checkpoint else ParallelPalmTransformerLayer(dim=dim, dim_head=dim_head, ffn_mult=ff_mult)
             for _ in range(depth)
         ],
         get_layernorm(dim),
