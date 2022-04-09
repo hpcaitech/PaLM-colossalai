@@ -4,14 +4,16 @@ import colossalai
 import random
 import string
 
-from typing import Any
 from colossalai.core import global_context as gpc
+from colossalai.logging import get_dist_logger
+
 
 def get_random_string(length):
     # choose from all lowercase letter
     letters = string.ascii_lowercase
-    result_str = ''.join(random.choice(letters) for i in range(int(length)))
+    result_str = "".join(random.choice(letters) for i in range(int(length)))
     return result_str
+
 
 class RandomTextDataset(torch.utils.data.Dataset):
     def __init__(self, data, seq_len):
@@ -27,9 +29,15 @@ class RandomTextDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.data.size(0) // self.seq_len
 
-def build_data_from_random(dataset_path: str, tokenizer_path: str, seq_len: int=512, batch_size: int=8):
+
+def build_data_from_random(
+    dataset_path: str,
+    tokenizer_path: str,
+    seq_len: int = 512,
+    batch_size: int = 8,
+):
     logger = get_dist_logger("build_data_from_random")
-    logger.info('Begin Building Random String as test data')
+    logger.info("Building synthetic data ...", ranks=[0])
     random_data = get_random_string(80e5)
     np_rd = np.fromstring(random_data, dtype=np.uint8)
     train_rd, test_rd = np.split(np_rd, [int(70e5)])
@@ -38,18 +46,22 @@ def build_data_from_random(dataset_path: str, tokenizer_path: str, seq_len: int=
     train_dataset = RandomTextDataset(data_train, seq_len)
     test_dataset = RandomTextDataset(data_val, seq_len)
 
-    train_dataloader = colossalai.utils.get_dataloader(train_dataset,
-                                            seed=1024,
-                                            batch_size=gpc.config.BATCH_SIZE,
-                                            pin_memory=True,
-                                            shuffle=True,
-                                            drop_last=True)
-    
-    test_dataloader = colossalai.utils.get_dataloader(test_dataset,
-                                            seed=1024,
-                                            batch_size=gpc.config.BATCH_SIZE,
-                                            pin_memory=True,
-                                            shuffle=False,
-                                            drop_last=True)
+    train_dataloader = colossalai.utils.get_dataloader(
+        train_dataset,
+        seed=1024,
+        batch_size=gpc.config.BATCH_SIZE,
+        pin_memory=True,
+        shuffle=True,
+        drop_last=True,
+    )
+
+    test_dataloader = colossalai.utils.get_dataloader(
+        test_dataset,
+        seed=1024,
+        batch_size=gpc.config.BATCH_SIZE,
+        pin_memory=True,
+        shuffle=False,
+        drop_last=True,
+    )
 
     return train_dataloader, test_dataloader
