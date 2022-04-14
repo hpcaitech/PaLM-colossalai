@@ -28,6 +28,20 @@ def calc_model_size(model: torch.nn.Module):
     return numel, numel_per_device
 
 
+def calc_mem(x):
+    res = 0
+    if isinstance(x, dict):
+        for v in x.values():
+            res += calc_mem(v)
+    elif isinstance(x, (tuple, list)):
+        for v in x:
+            res += calc_mem(v)
+    elif isinstance(x, torch.Tensor):
+        res += x.element_size() * x.numel()
+
+    return res
+
+
 """Autoregressive wrapper adapted from
 https://github.com/lucidrains/PaLM-pytorch/blob/main/palm_pytorch/autoregressive_wrapper.py
 """

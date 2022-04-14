@@ -5,7 +5,7 @@ import colossalai
 import torch
 from colossalai.core import global_context as gpc
 from colossalai.logging import disable_existing_loggers, get_dist_logger
-from colossalai.nn import LinearWarmupLR, CPUAdam
+from colossalai.nn import LinearWarmupLR
 from colossalai.trainer import Trainer, hooks
 from colossalai.utils import MultiTimer, get_current_device
 from colossalai.zero.init_ctx import ZeroInitContext
@@ -13,7 +13,7 @@ from colossalai.nn.optimizer import HybridAdam
 
 from data import build_data
 from model import build_loss, build_model
-from utils import AutoregressiveWrapper, calc_model_size
+from utils import AutoregressiveWrapper, calc_model_size, calc_mem
 
 
 def train_palm():
@@ -86,8 +86,8 @@ def train_palm():
     # If we set cpu_offload=True in optimizer_config
     use_cpu_adam = (
         hasattr(gpc.config, "zero")
-        and hasattr(gpc.config.zero, "optimizer_config")
-        and getattr(gpc.config.zero.optimizer_config, "cpu_offload", False)
+        and hasattr(gpc.config.zero, "model_config")
+        and getattr(gpc.config.zero.model_config, "tensor_placement_policy") != "cuda"
     )
     optimizer = HybridAdam if use_cpu_adam else torch.optim.AdamW
     optimizer = optimizer(model.parameters(), lr=0.001, weight_decay=1e-2)
@@ -98,13 +98,12 @@ def train_palm():
 
     logger.info("Optimizer is built.", ranks=[0])
 
-    engine, train_dataloader, test_dataloader, _ = colossalai.initialize(
+    engine, train_dataloader, _, _ = colossalai.initialize(
         model=model,
         optimizer=optimizer,
         criterion=criterion,
         # lr_scheduler=lr_scheduler,
         train_dataloader=train_dataloader,
-        test_dataloader=test_dataloader,
     )
 
     def batch_data_process_func(batch_data):
@@ -121,23 +120,27 @@ def train_palm():
         hooks.LogMetricByEpochHook(logger=logger),
         hooks.LogMetricByStepHook(),
         hooks.LossHook(),
-        hooks.ThroughputHook(),
+        hooks.ThroughputHook(ignored_steps=10),
         # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
         hooks.LogMemoryByEpochHook(logger),
-        # hooks.LogTimingByEpochHook(timer, logger, ignore_num_train_steps=5),
-        # hooks.SaveCheckpointHook(checkpoint_dir="./palm.ckpt"),
+        # hooks.SaveCheckpointHook(checkpoint_dir="./palm.ckpt", model=model),
     ]
 
     logger.info("Training start.", ranks=[0])
     trainer.fit(
         train_dataloader=train_dataloader,
-        test_dataloader=test_dataloader,
         epochs=gpc.config.NUM_EPOCHS,
-        # max_steps=10,
+        max_steps=20,
         hooks=hook_list,
         return_output_label=False,
         display_progress=True,
     )
+
+    opt_state = engine.optimizer.state_dict()
+    if isinstance(engine.optimizer, colossalai.amp.naive_amp.NaiveAMPOptimizer):
+        opt_state = opt_state['optimizer']
+    os_mem = calc_mem(opt_state)
+    logger.info(f"{engine.optimizer.__class__.__name__} state memory usage = {os_mem / 1024**2:.3f} MB", ranks=[0])
 
     gpc.destroy()
     logger.info("Training complete.", ranks=[0])

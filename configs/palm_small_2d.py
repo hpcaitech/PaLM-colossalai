@@ -2,8 +2,8 @@ from colossalai.amp import AMP_TYPE
 
 SEQ_LENGTH = 512
 BATCH_SIZE = 8
-NUM_EPOCHS = 1
-# WARMUP_EPOCHS = 1
+NUM_EPOCHS = 10
+WARMUP_EPOCHS = 1
 
 parallel = dict(
     tensor=dict(mode="2d", size=4),
