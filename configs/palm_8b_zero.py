@@ -17,7 +17,6 @@ model = dict(
 
 zero = dict(
     model_config=dict(
-        offload_config=dict(device="cpu"),
         shard_strategy=TensorShardStrategy(),
         tensor_placement_policy='cuda',
     ),
