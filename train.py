@@ -9,6 +9,7 @@ from colossalai.nn import LinearWarmupLR, CPUAdam
 from colossalai.trainer import Trainer, hooks
 from colossalai.utils import MultiTimer, get_current_device
 from colossalai.zero.init_ctx import ZeroInitContext
+from colossalai.nn.optimizer import HybridAdam
 
 from data import build_data
 from model import build_loss, build_model
@@ -88,7 +89,7 @@ def train_palm():
         and hasattr(gpc.config.zero, "optimizer_config")
         and getattr(gpc.config.zero.optimizer_config, "cpu_offload", False)
     )
-    optimizer = CPUAdam if use_cpu_adam else torch.optim.AdamW
+    optimizer = HybridAdam if use_cpu_adam else torch.optim.AdamW
     optimizer = optimizer(model.parameters(), lr=0.001, weight_decay=1e-2)
 
     # total_steps = gpc.config.NUM_EPOCHS * len(train_dataloader)
