@@ -21,7 +21,7 @@ zero = dict(
         tensor_placement_policy='cuda',
     ),
     optimizer_config=dict(
-        cpu_offload=True,
+        gpu_margin_mem_ratio = 0.8,
         initial_scale=2**5,
     )
 )
