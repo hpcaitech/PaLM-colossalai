@@ -12,13 +12,13 @@ parallel = dict(
 model = dict(
     type="palm_16b",
     use_grad_checkpoint=True,
-    use_act_offload=False,
+    use_act_offload=True,
 )
 
 zero = dict(
     model_config=dict(
         shard_strategy=TensorShardStrategy(),
-        tensor_placement_policy='cuda',
+        tensor_placement_policy='auto',
     ),
     optimizer_config=dict(
         gpu_margin_mem_ratio = 0.8,

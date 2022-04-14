@@ -18,7 +18,7 @@ model = dict(
 zero = dict(
     model_config=dict(
         shard_strategy=TensorShardStrategy(),
-        tensor_placement_policy='cuda',
+        tensor_placement_policy='auto',
     ),
     optimizer_config=dict(
         gpu_margin_mem_ratio = 0.8,
