@@ -1,7 +1,7 @@
 from colossalai.zero.shard_utils import TensorShardStrategy
 
 SEQ_LENGTH = 2048
-BATCH_SIZE = 4
+BATCH_SIZE = 16 
 NUM_EPOCHS = 1
 # WARMUP_EPOCHS = 1
 

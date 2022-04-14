@@ -17,7 +17,9 @@ from utils import AutoregressiveWrapper, calc_model_size
 
 
 def train_palm():
-    torch.cuda.is_available()
+    assert torch.cuda.is_available()
+    from colossalai.utils.memory import colo_set_process_memory_fraction
+    colo_set_process_memory_fraction(0.5)
     disable_existing_loggers()
     parser = colossalai.get_default_parser()
     parser.add_argument("--from_torch", default=False, action="store_true")
