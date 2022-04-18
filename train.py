@@ -10,6 +10,7 @@ from colossalai.trainer import Trainer, hooks
 from colossalai.utils import MultiTimer, get_current_device
 from colossalai.zero.init_ctx import ZeroInitContext
 from colossalai.nn.optimizer import HybridAdam
+from colossalai.context import ParallelMode
 
 from data import build_data
 from model import build_loss, build_model
@@ -62,7 +63,7 @@ def train_palm():
     if use_zero:
         seq_len=gpc.config.SEQ_LENGTH
         batch_size=gpc.config.BATCH_SIZE
-        tflop =  ctx.model_numel_tensor.item() * batch_size * seq_len * 8 / (1024 **3)
+        tflop =  ctx.model_numel_tensor.item() * batch_size * seq_len * gpc.get_world_size(ParallelMode.DATA) * 8 / (1024 ** 4)
 
     numel, _ = calc_model_size(model)
     if numel < 1e9:
