@@ -1,9 +1,9 @@
-from colossalai.zero.shard_utils import TensorShardStrategy
+from colossalai.amp import AMP_TYPE
 
 SEQ_LENGTH = 2048
 BATCH_SIZE = 4
-NUM_EPOCHS = 1
-# WARMUP_EPOCHS = 1
+NUM_EPOCHS = 10
+WARMUP_EPOCHS = 1
 
 parallel = dict(
     tensor=dict(mode="3d", size=8),
@@ -12,16 +12,9 @@ parallel = dict(
 model = dict(
     type="palm_62b",
     use_grad_checkpoint=True,
-    use_act_offload=False,
+    use_act_offload=True,
 )
 
-zero = dict(
-    model_config=dict(
-        offload_config=dict(device="cpu"),
-        shard_strategy=TensorShardStrategy()
-    ),
-    optimizer_config=dict(
-        cpu_offload=True,
-        initial_scale=2**5,
-    )
-)
+fp16 = dict(mode=AMP_TYPE.NAIVE)
+
+clip_grad_norm = 1.0
