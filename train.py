@@ -10,6 +10,7 @@ from colossalai.trainer import Trainer, hooks
 from colossalai.utils import MultiTimer, get_current_device
 from colossalai.zero.init_ctx import ZeroInitContext
 from colossalai.nn.optimizer import HybridAdam
+from colossalai.context import ParallelMode
 
 from data import build_data
 from model import build_loss, build_model
@@ -43,6 +44,7 @@ def train_palm():
 
     use_zero = hasattr(gpc.config, "zero")
     ctx = contextlib.nullcontext()
+    tflop = 0 
     if use_zero:
         ctx = ZeroInitContext(
             target_device=torch.cuda.current_device(),
@@ -58,6 +60,10 @@ def train_palm():
     with ctx:
         model = build_model()
         model = AutoregressiveWrapper(model)
+    if use_zero:
+        seq_len=gpc.config.SEQ_LENGTH
+        batch_size=gpc.config.BATCH_SIZE
+        tflop =  ctx.model_numel_tensor.item() * batch_size * seq_len * gpc.get_world_size(ParallelMode.DATA) * 8 / (1024 ** 4)
 
     numel, _ = calc_model_size(model)
     if numel < 1e9:
@@ -120,7 +126,7 @@ def train_palm():
         hooks.LogMetricByEpochHook(logger=logger),
         hooks.LogMetricByStepHook(),
         hooks.LossHook(),
-        hooks.ThroughputHook(ignored_steps=10),
+        hooks.ThroughputHook(ignored_steps=10, tflop_per_step = tflop),
         # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
         hooks.LogMemoryByEpochHook(logger),
         # hooks.SaveCheckpointHook(checkpoint_dir="./palm.ckpt", model=model),

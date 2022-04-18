@@ -1,16 +1,16 @@
 from colossalai.zero.shard_utils import TensorShardStrategy
 
 SEQ_LENGTH = 2048
-BATCH_SIZE = 4
+BATCH_SIZE = 4 
 NUM_EPOCHS = 1
 # WARMUP_EPOCHS = 1
 
 parallel = dict(
-    # tensor=dict(mode="3d", size=8),
+    tensor=dict(mode="2d", size=4),
 )
 
 model = dict(
-    type="palm_16b",
+    type="palm_24b",
     use_grad_checkpoint=True,
     use_act_offload=True,
 )
