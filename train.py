@@ -17,9 +17,7 @@ from utils import AutoregressiveWrapper, calc_model_size
 
 
 def train_palm():
-    assert torch.cuda.is_available()
-    from colossalai.utils.memory import colo_set_process_memory_fraction
-    colo_set_process_memory_fraction(0.5)
+    torch.cuda.is_available()
     disable_existing_loggers()
     parser = colossalai.get_default_parser()
     parser.add_argument("--from_torch", default=False, action="store_true")
@@ -45,6 +43,7 @@ def train_palm():
 
     use_zero = hasattr(gpc.config, "zero")
     ctx = contextlib.nullcontext()
+    tflop = 0 
     if use_zero:
         ctx = ZeroInitContext(
             target_device=torch.cuda.current_device(),
@@ -60,6 +59,10 @@ def train_palm():
     with ctx:
         model = build_model()
         model = AutoregressiveWrapper(model)
+    if use_zero:
+        seq_len=gpc.config.SEQ_LENGTH
+        batch_size=gpc.config.BATCH_SIZE
+        tflop =  ctx.model_numel_tensor.item() * batch_size * seq_len * 8 / (1024 **3)
 
     numel, _ = calc_model_size(model)
     if numel < 1e9:
@@ -123,7 +126,7 @@ def train_palm():
         hooks.LogMetricByEpochHook(logger=logger),
         hooks.LogMetricByStepHook(),
         hooks.LossHook(),
-        hooks.ThroughputHook(),
+        hooks.ThroughputHook(tflop_per_step = tflop),
         # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
         hooks.LogMemoryByEpochHook(logger),
         # hooks.LogTimingByEpochHook(timer, logger, ignore_num_train_steps=5),
