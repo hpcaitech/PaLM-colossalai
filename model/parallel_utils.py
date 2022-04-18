@@ -1,4 +1,3 @@
-import colossalai
 import torch
 from colossalai.context import ParallelMode
 from colossalai.constants import OUTPUT_GROUP_3D
@@ -58,14 +57,3 @@ class _GatherForwardReduceScatterBackward(torch.autograd.Function):
 
 def gather_fwd_reduce_scatter_bwd(tensor, dim, parallel_mode):
     return _GatherForwardReduceScatterBackward.apply(tensor, dim, parallel_mode)
-
-
-def get_layernorm(dim):
-    """
-    Layernorm without bias
-    """
-
-    norm = colossalai.nn.LayerNorm(dim)
-    norm.bias.data.copy_(torch.zeros_like(norm.bias.data))
-    norm.bias.requires_grad = False
-    return norm

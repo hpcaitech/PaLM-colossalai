@@ -1,7 +1,7 @@
 from colossalai.amp import AMP_TYPE
 
 SEQ_LENGTH = 2048
-BATCH_SIZE = 64
+BATCH_SIZE = 8
 NUM_EPOCHS = 10
 WARMUP_EPOCHS = 1
 
@@ -10,13 +10,13 @@ parallel = dict(
 )
 
 model = dict(
-    type="palm_8b",
+    type="palm_30b",
     use_grad_checkpoint=True,
-    use_act_offload=False,
+    use_act_offload=True,
 )
 
 fp16 = dict(mode=AMP_TYPE.TORCH)
 
 clip_grad_norm = 1.0
 
-LOG_PATH = "./palm_8b_3d/"
+LOG_PATH = "./palm_30b_3d/"

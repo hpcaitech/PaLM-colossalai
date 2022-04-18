@@ -10,7 +10,6 @@ from torch import dtype, einsum
 from model.palm_utils import RotaryEmbedding, SwiGLU, apply_rotary_pos_emb
 from model.parallel_utils import (
     gather_fwd_reduce_scatter_bwd,
-    get_layernorm,
     get_parallel_mode_for_gather,
     partition_by_tp,
 )
@@ -23,7 +22,7 @@ class ParallelPalmTransformerLayer(CheckpointModule):
         dim_head: int = 64,
         num_heads: int = 8,
         ffn_mult: int = 4,
-        multi_query: bool = True,
+        multi_query: bool = False,
         use_grad_checkpoint=False,
         use_act_offload=False,
     ):
@@ -60,7 +59,7 @@ class ParallelPalmTransformerLayer(CheckpointModule):
 
         self.rotary_emb = RotaryEmbedding(self.dim_head)
         self.swiglu = SwiGLU()
-        self.norm = get_layernorm(dim)
+        self.norm = colossalai.nn.LayerNorm(dim, bias=False)
         self.scale = dim_head**-0.5
 
         self.register_buffer("mask", None, persistent=False)
@@ -192,8 +191,9 @@ def Parallel_PaLM(
     dim_head=64,
     num_heads=8,
     ff_mult=4,
-    use_grad_checkpoint=True,
-    use_act_offload=True,
+    multi_query=False,
+    use_grad_checkpoint=False,
+    use_act_offload=False,
 ):
     word_embedding = colossalai.nn.Embedding(num_tokens, dim)
     net = nn.Sequential(
@@ -204,12 +204,13 @@ def Parallel_PaLM(
                 dim_head=dim_head,
                 num_heads=num_heads,
                 ffn_mult=ff_mult,
+                multi_query=multi_query,
                 use_grad_checkpoint=use_grad_checkpoint,
                 use_act_offload=use_act_offload,
             )
             for _ in range(depth)
         ],
-        get_layernorm(dim),
+        colossalai.nn.LayerNorm(dim, bias=False),
         # they used embedding weight tied projection out to logits, not common, but works
         PaLMHead(dim=dim, num_tokens=num_tokens, word_embedding_weight=word_embedding.weight, bias=False),
     )
