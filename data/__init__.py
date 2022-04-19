@@ -16,7 +16,7 @@ def build_data(**args):
         ), f"Invalid dataset name. dataset should be in {_datasets.keys()} or use default wikitext"
         builder = _datasets[gpc.config.dataset]
     else:
-        builder = _datasets["wikitext"]
+        builder = _datasets["test"]
     return builder(**args)
 
 
