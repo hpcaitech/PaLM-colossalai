@@ -1,12 +1,12 @@
 from colossalai.zero.shard_utils import TensorShardStrategy
 
 SEQ_LENGTH = 2048
-BATCH_SIZE = 4
+BATCH_SIZE = 8 
 NUM_EPOCHS = 1
 # WARMUP_EPOCHS = 1
 
 parallel = dict(
-    # tensor=dict(mode="3d", size=8),
+    tensor=dict(mode="1d", size=2),
 )
 
 model = dict(
@@ -18,10 +18,10 @@ model = dict(
 zero = dict(
     model_config=dict(
         shard_strategy=TensorShardStrategy(),
-        tensor_placement_policy='cuda',
+        tensor_placement_policy='auto',
     ),
     optimizer_config=dict(
-        cpu_offload=True,
+        gpu_margin_mem_ratio = 0.8,
         initial_scale=2**5,
     )
 )

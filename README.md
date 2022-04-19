@@ -47,7 +47,7 @@ export TOKENIZER=</PATH/TO/TOKENIZER/>
 
 3.  Run
 ```shell
-OMP_NUM_THREADS=12 torchrun --nproc_per_node NUM_GPUS \
+env OMP_NUM_THREADS=12 torchrun --nproc_per_node NUM_GPUS \
     train.py --from_torch --config CONFIG_FILE.py
 ```
 
