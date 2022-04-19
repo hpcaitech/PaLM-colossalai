@@ -64,3 +64,6 @@ docker run -ti --gpus all --rm palm \
     torchrun --nproc_per_node NUM_GPUS \
         train.py --from_torch --config CONFIG_FILE.py
 ```
+
+##  Acknowledgement
+The project has referred [PaLM-Pytorch](https://github.com/lucidrains/PaLM-pytorch) from [lucidrains](https://github.com/lucidrains).

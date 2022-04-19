@@ -1,3 +1,4 @@
+from asyncio.log import logger
 import contextlib
 import os
 
@@ -5,7 +6,6 @@ import colossalai
 import torch
 from colossalai.core import global_context as gpc
 from colossalai.logging import disable_existing_loggers, get_dist_logger
-from colossalai.nn import LinearWarmupLR
 from colossalai.trainer import Trainer, hooks
 from colossalai.utils import MultiTimer, get_current_device
 from colossalai.zero.init_ctx import ZeroInitContext
@@ -14,11 +14,21 @@ from colossalai.context import ParallelMode
 
 from data import build_data
 from model import build_loss, build_model
-from utils import AutoregressiveWrapper, calc_model_size, calc_mem
+from utils import AutoregressiveWrapper, calc_local_model_size, calc_mem
+from colossalai.utils import colo_set_process_memory_fraction, colo_device_memory_capacity
 
 
+def limit_cuda_memory(size_in_GB: int):
+    cuda_capacity = colo_device_memory_capacity(get_current_device())
+    if size_in_GB * (1024**3) < cuda_capacity:
+        colo_set_process_memory_fraction(size_in_GB * (1024**3) / cuda_capacity)
+        logger = get_dist_logger()
+        logger.info("Using {} GB of GPU memory".format(size_in_GB))
+    
 def train_palm():
-    torch.cuda.is_available()
+    assert torch.cuda.is_available()
+    # set to 40GB, if you are using a high-end GPU.
+    limit_cuda_memory(40)
     disable_existing_loggers()
     parser = colossalai.get_default_parser()
     parser.add_argument("--from_torch", default=False, action="store_true")
@@ -60,12 +70,20 @@ def train_palm():
     with ctx:
         model = build_model()
         model = AutoregressiveWrapper(model)
-    if use_zero:
-        seq_len=gpc.config.SEQ_LENGTH
-        batch_size=gpc.config.BATCH_SIZE
-        tflop =  ctx.model_numel_tensor.item() * batch_size * seq_len * gpc.get_world_size(ParallelMode.DATA) * 8 / (1024 ** 4)
+    
+    seq_len=gpc.config.SEQ_LENGTH
+    batch_size=gpc.config.BATCH_SIZE
 
-    numel, _ = calc_model_size(model)
+    # numel is a model elem in a DP process.
+    numel = 0
+    if use_zero:
+        numel = ctx.model_numel_tensor.item()
+    else:
+        numel = calc_local_model_size(model)
+
+    tflop = numel * batch_size * seq_len \
+            * gpc.get_world_size(ParallelMode.MODEL) * gpc.get_world_size(ParallelMode.DATA) * 8 / (1024 ** 4)
+
     if numel < 1e9:
         msg = f"{numel / 1e6:.3f} M"
     else:
