@@ -14,7 +14,7 @@ from colossalai.context import ParallelMode
 
 from data import build_data
 from model import build_loss, build_model
-from utils import AutoregressiveWrapper, calc_model_size, calc_mem
+from utils import AutoregressiveWrapper, calc_local_model_size, calc_mem
 from colossalai.utils import colo_set_process_memory_fraction, colo_device_memory_capacity
 
 
@@ -79,7 +79,7 @@ def train_palm():
     if use_zero:
         numel = ctx.model_numel_tensor.item()
     else:
-        numel, _ = calc_model_size(model)
+        numel = calc_local_model_size(model)
 
     tflop = numel * batch_size * seq_len \
             * gpc.get_world_size(ParallelMode.MODEL) * gpc.get_world_size(ParallelMode.DATA) * 8 / (1024 ** 4)

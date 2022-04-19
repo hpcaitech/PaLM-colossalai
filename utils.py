@@ -8,24 +8,11 @@ from colossalai.utils import get_current_device
 from torch import nn
 
 
-def calc_model_size(model: torch.nn.Module):
-    tensor_parallel_size = gpc.tensor_parallel_size
-    numel = 0
+def calc_local_model_size(model: torch.nn.Module):
     numel_per_device = 0
     for p in model.parameters():
-        num_partitions = getattr(p, NUM_PARTITIONS, 0)
-        if tensor_parallel_size > 1 and num_partitions > 1:
-            numel += p.numel() * num_partitions
-        else:
-            numel += p.numel()
         numel_per_device += p.numel()
-
-    if tensor_parallel_size > 1:
-        numel = torch.tensor(numel).to(get_current_device())
-        dist.all_reduce(numel, group=gpc.get_group(ParallelMode.TENSOR))
-        numel = numel.item() / tensor_parallel_size
-
-    return numel, numel_per_device
+    return numel_per_device
 
 
 def calc_mem(x):
