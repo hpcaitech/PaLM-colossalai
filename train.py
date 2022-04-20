@@ -152,7 +152,7 @@ def train_palm():
         hooks.LogMetricByEpochHook(logger=logger),
         hooks.LogMetricByStepHook(),
         hooks.LossHook(),
-        hooks.ThroughputHook(ignored_steps=10, tflop_per_step = tflop),
+        hooks.ThroughputHook(ignored_steps=10, tflop_per_step = tflop, use_local = False),
         # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
         hooks.LogMemoryByEpochHook(logger),
         # hooks.SaveCheckpointHook(checkpoint_dir="./palm.ckpt", model=model),

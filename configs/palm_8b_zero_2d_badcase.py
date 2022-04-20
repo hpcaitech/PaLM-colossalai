@@ -6,7 +6,7 @@ NUM_EPOCHS = 1
 # WARMUP_EPOCHS = 1
 
 parallel = dict(
-    tensor=dict(mode="2d", size=4),
+    tensor=dict(mode="2d", size=8),
 )
 
 model = dict(
