@@ -15,7 +15,7 @@ from colossalai.context import ParallelMode
 from data import build_data
 from model import build_loss, build_model
 from utils import AutoregressiveWrapper, calc_local_model_size, calc_mem
-from colossalai.utils import colo_set_process_memory_fraction, colo_device_memory_capacity
+from colossalai.utils import colo_set_process_memory_fraction, colo_device_memory_capacity, colo_set_cpu_memory_capacity
 
 
 def limit_cuda_memory(size_in_GB: int):
@@ -24,11 +24,18 @@ def limit_cuda_memory(size_in_GB: int):
         colo_set_process_memory_fraction(size_in_GB * (1024**3) / cuda_capacity)
         logger = get_dist_logger()
         logger.info("Using {} GB of GPU memory".format(size_in_GB))
-    
+
+def limit_cpu_memory(size_in_GB: int):
+    colo_set_cpu_memory_capacity(size_in_GB * 1024 ** 3)
+
 def train_palm():
     assert torch.cuda.is_available()
-    # set to 40GB, if you are using a high-end GPU.
+    # limit cuda memory of each GPU to 40GB, if you are using a high-end GPU.
     limit_cuda_memory(40)
+
+    # limit the cpu memory of the CPU to 312 GB
+    # limit_cpu_memory(312)
+
     disable_existing_loggers()
     parser = colossalai.get_default_parser()
     parser.add_argument("--from_torch", default=False, action="store_true")
@@ -81,6 +88,7 @@ def train_palm():
     else:
         numel = calc_local_model_size(model)
 
+    # global Tera FLOating Points operations per iteration.
     tflop = numel * batch_size * seq_len \
             * gpc.get_world_size(ParallelMode.MODEL) * gpc.get_world_size(ParallelMode.DATA) * 8 / (1024 ** 4)
 
@@ -144,7 +152,7 @@ def train_palm():
         hooks.LogMetricByEpochHook(logger=logger),
         hooks.LogMetricByStepHook(),
         hooks.LossHook(),
-        hooks.ThroughputHook(ignored_steps=10, tflop_per_step = tflop),
+        hooks.ThroughputHook(ignored_steps=10, tflop_per_step = tflop, use_local = False),
         # hooks.LRSchedulerHook(lr_scheduler=lr_scheduler, by_epoch=False),
         hooks.LogMemoryByEpochHook(logger),
         # hooks.SaveCheckpointHook(checkpoint_dir="./palm.ckpt", model=model),
