@@ -21,7 +21,7 @@ python ./tools/download_wiki.py -o </PATH/TO/DATA>
 3. Download tokenizer files by calling the following command. The place holder `/PATH/TO/TOKENIZER/` is optional and is `./token` by default.
 
 ```bash
-bash ./tools/download_token.py </PATH/TO/TOKENIZER/>
+bash ./tools/download_token.sh </PATH/TO/TOKENIZER/>
 ```
 
 ## Usage
