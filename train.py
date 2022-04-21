@@ -27,8 +27,7 @@ def limit_cuda_memory(size_in_GB: int):
     
 def train_palm():
     assert torch.cuda.is_available()
-    # set to 40GB, if you are using a high-end GPU.
-    limit_cuda_memory(40)
+    
     disable_existing_loggers()
     parser = colossalai.get_default_parser()
     parser.add_argument("--from_torch", default=False, action="store_true")
@@ -47,6 +46,9 @@ def train_palm():
             port=args.port,
             seed=42,
         )
+
+    # set to 40GB, if you are using a high-end GPU.
+    limit_cuda_memory(40)
 
     assert hasattr(gpc.config, "BATCH_SIZE"), "Please provide BATCH_SIZE in your configuration"
     assert hasattr(gpc.config, "SEQ_LENGTH"), "Please provide SEQ_LENGTH in your configuration"
