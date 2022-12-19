@@ -142,3 +142,9 @@ docs/.build
 # pytorch checkpoint
 *.pt
 *.ckpt
+
+# token
+token/
+
+# dataset
+wiki_dataset/
