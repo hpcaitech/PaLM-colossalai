@@ -5,7 +5,7 @@ from colossalai.context import ParallelMode
 from colossalai.core import global_context as gpc
 from colossalai.nn import CheckpointModule
 from einops import rearrange
-from torch import dtype, einsum
+from torch import dtype, einsum, matmul
 
 from model.palm_utils import RotaryEmbedding, SwiGLU, apply_rotary_pos_emb
 from model.parallel_utils import (
@@ -132,11 +132,13 @@ class ParallelPalmTransformerLayer(CheckpointModule):
 
         # calculate similarity
         if self.multi_query:
-            sim = einsum("b h s d, b j d -> b h s j", q, k)
+            #sim = einsum("b h s d, b j d -> b h s j", q, k)
+            sim = matmul(q, k.transpose(1,2))
         else:
             # s and n here refer to sequence length
             # n is used only because einsum cannot have 2 same notations
-            sim = einsum("b h s d, b h n d -> b h s n", q, k)
+            #sim = einsum("b h s d, b h n d -> b h s n", q, k)
+            sim = matmul(q, k.transpose(2,3))
 
         # apply casual mask
         causal_mask = self.get_mask(seq_length, device)
@@ -148,9 +150,11 @@ class ParallelPalmTransformerLayer(CheckpointModule):
 
         # aggregate values
         if self.multi_query:
-            attn_out = einsum("b h i j, b j d -> b h i d", attn, v)
+            #attn_out = einsum("b h i j, b j d -> b h i d", attn, v)
+            attn_out = matmul(attn, v)
         else:
-            attn_out = einsum("b h s n, b h n d -> b h s d", attn, v)
+            #attn_out = einsum("b h s n, b h n d -> b h s d", attn, v)
+            attn_out = matmul(attn, v)
 
         # merge heads
         attn_out = rearrange(attn_out, "b h s d -> b s (h d)")

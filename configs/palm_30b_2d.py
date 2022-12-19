@@ -4,6 +4,9 @@ SEQ_LENGTH = 2048
 BATCH_SIZE = 2
 NUM_EPOCHS = 10
 WARMUP_EPOCHS = 1
+TPDEGREE = 2
+USE_SHARD_INIT = False
+placement = 'cpu'
 
 parallel = dict(
     tensor=dict(mode="2d", size=4),
@@ -27,4 +30,4 @@ zero = dict(
 
 clip_grad_norm = 1.0
 
-LOG_PATH = "./palm_30b_2d/"
+LOG_PATH = "./palm_30b_2d_new/"
